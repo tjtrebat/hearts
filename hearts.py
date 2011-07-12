@@ -30,6 +30,22 @@ class Hearts:
         update = multiprocessing.Process(target=self.update_server)
         update.start()
 
+    def new_game(self):
+        for i in range(13):
+            for player in self.players:
+                player.add(self.deck.pop())
+        for i, player in enumerate(self.players):
+            players = self.players[i:len(self.players)] + self.players[0:i]
+            player.conn.send("\n".join(["player {} {}".format(j, str(p)) for j, p in enumerate(players)]))
+            player.conn.send("cards {} {}".format(player.id, " ".join([str(hash(card)) for card in player.cards])))
+
+    def get_player(self, id):
+        player = None
+        for p in self.players:
+            if id == p.id:
+                player = p
+        return player
+        
     def run_server(self):
         server = HeartsServer("localhost", 50007, "hearts.p")
 
@@ -53,22 +69,18 @@ class Hearts:
                                         self.new_game()
                                         self.in_game = True
                         else:
-                            if line[0] == "quit":
+                            if line[0] == "pass":
+                                pass
+
+                                #next_player = self.players[(self.players.index(player) + 1) % len(self.players)]
+                                #next_player.conn.send("")
+                            elif line[0] == "quit":
                                 self.players.remove(player)
                                 for p in self.players:
                                     p.conn.send("quit {}".format(player.id))
                         self.line_num += 1
                 data.close()
             time.sleep(5)
-
-    def new_game(self):
-        for i in range(13):
-            for player in self.players:
-                player.add(self.deck.pop())
-        for i, player in enumerate(self.players):
-            players = self.players[i:len(self.players)] + self.players[0:i]
-            player.conn.send("\n".join(["player {} {}".format(j, str(p)) for j, p in enumerate(players)]))
-            player.conn.send("cards {} {}".format(player.id, " ".join([str(hash(card)) for card in player.cards])))
 
 if __name__ == "__main__":
     hearts = Hearts()

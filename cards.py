@@ -6,6 +6,7 @@ class Card:
     def __init__(self, rank, suit):
         self.rank = rank
         self.suit = suit
+        self.image = self.get_image()
 
     def get_image(self):
         try:

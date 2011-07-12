@@ -30,13 +30,13 @@ class PlayerGUI(threading.Thread):
         self.root = root
         self.canvas = Canvas(self.root, width=1000, height=650)
         self.player_frame = Frame(self.root)
-        self.player_btn = Button(self.player_frame, text='Pass Left', command=self.play_card, state=DISABLED)
+        self.player_btn = Button(self.player_frame, text='Pass Left', command=self.pass_left, state=DISABLED)
         self.players = []
         self.face_down_image = PhotoImage(file="cards/b1fv.gif")
         self.cards = self.get_cards()
         self.id = str(uuid.uuid4())
-        self.cards_raised = 0
-        self.max_cards_raised = 3
+        self.raised_cards = []
+        self.max_raised_cards = 3
         self.add_widgets()
         self.add_canvas_widgets()
         self.HOST, self.PORT = "localhost", random.randint(1000, 60000)
@@ -65,27 +65,37 @@ class PlayerGUI(threading.Thread):
             self.canvas.create_window(player_canvas.get_position(), window=player_canvas.canvas)
             self.players.append(player_canvas)
 
-    def lift_card(self, event, card):
-        if self.cards_raised < self.max_cards_raised:
+    def lift_card(self, event, card, id_card):
+        if len(self.raised_cards) < self.max_raised_cards:
             event.widget.move(card, 0, -20)
-            event.widget.tag_bind(card, "<Button-1>", lambda x, y=card:self.lower_card(x, y))
-            self.cards_raised += 1
-            if self.cards_raised >= self.max_cards_raised:
+            event.widget.tag_bind(card, "<Button-1>", lambda x, y=(card, id_card,):self.lower_card(x, *y))
+            self.raised_cards.append((id_card, card,))
+            if len(self.raised_cards) >= self.max_raised_cards:
                 self.player_btn.config(state=ACTIVE)
 
-    def lower_card(self, event, card):
+    def lower_card(self, event, card, id_card):
         event.widget.move(card, 0, 20)
-        event.widget.tag_bind(card, "<Button-1>", lambda x, y=card:self.lift_card(x, y))
-        self.cards_raised -= 1
+        event.widget.tag_bind(card, "<Button-1>", lambda x, y=(card, id_card,):self.lift_card(x, *y))
+        self.raised_cards.remove((id_card, card,))
         self.player_btn.config(state=DISABLED)
-        
+
+    def pass_left(self):
+        for raised_card in self.raised_cards:
+            self.players[0].canvas.move(raised_card[1], 0, 20)
+        self.player_btn.config(state=DISABLED)
+        self.conn.send("pass {} {}".format(self.id, " ".join([raised_card[0] for raised_card in self.raised_cards])))
+
+    def quit(self):
+        self.conn.send("quit {}".format(self.id))
+        self.root.destroy()
+
     def get_cards(self):
         cards = {}
         deck = Deck()
         for card in deck:
-            cards[hash(card)] = PhotoImage(file=card.get_image())
+            cards[hash(card)] = PhotoImage(file=card.image)
         return cards
-
+    
     def get_player_canvas(self, id):
         player_canvas = None
         for player in self.players:
@@ -114,20 +124,13 @@ class PlayerGUI(threading.Thread):
                             player_canvas.canvas.itemconfig(player_card, image=self.cards[int(card)])
                             if self.id == player_canvas.id:
                                 player_canvas.canvas.tag_bind(player_card, "<Button-1>",
-                                                              lambda x, y=player_card:self.lift_card(x, y))
+                                                              lambda x, y=(player_card, card,):self.lift_card(x, *y))
                     elif line[0] == "quit":
                         player_canvas = self.get_player_canvas(line[1])
                         player_canvas.canvas.delete(ALL)
                     self.line_num += 1
             data.close()
         self.root.after(5000, self.update_widgets)
-
-    def play_card(self):
-        pass
-
-    def quit(self):
-        self.conn.send("quit {}".format(self.id))
-        self.root.destroy()
 
 if __name__ == "__main__":
     root = Tk()
