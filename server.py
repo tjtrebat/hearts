@@ -15,8 +15,8 @@ class HeartsHandler(asyncore.dispatcher_with_send):
             handle = open(self.file_name, "a")
         except (socket.error, IOError):
             sys.exit("Error reading data from client.")
-        print(data)
-        handle.write(data + "\n")
+        print(data.strip())
+        handle.write(data)
 
     @classmethod
     def load_data(cls, line):

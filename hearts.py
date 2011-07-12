@@ -43,8 +43,8 @@ class Hearts:
                 for line in data.readlines()[self.line_num:]:
                     line = HeartsHandler.load_data(line)
                     if len(line):
+                        player = HeartsPlayer(line[1])
                         if not self.in_game:
-                            player = HeartsPlayer(line[1])
                             if line[0] == "join":
                                 if player not in self.players:
                                     player.conn = Client(line[2], int(line[3]))
@@ -52,9 +52,11 @@ class Hearts:
                                     if len(self.players) >= self.max_players:
                                         self.new_game()
                                         self.in_game = True
-                            elif line[0] == "quit":
-                                if player in self.players:
-                                    self.players.remove(player)
+                        else:
+                            if line[0] == "quit":
+                                self.players.remove(player)
+                                for p in self.players:
+                                    p.conn.send("quit {}".format(player.id))
                         self.line_num += 1
                 data.close()
             time.sleep(5)
@@ -63,12 +65,10 @@ class Hearts:
         for i in range(13):
             for player in self.players:
                 player.add(self.deck.pop())
-        for i in range(len(self.players)):
+        for i, player in enumerate(self.players):
             players = self.players[i:len(self.players)] + self.players[0:i]
-            for position, player in enumerate(players):
-                self.players[i].conn.send("player {} {}\n".format(position, str(player)))
-            players[0].conn.send("cards {} {}\n".format(players[0].id,
-                                                        " ".join([str(hash(card)) for card in players[0].cards])))
+            player.conn.send("\n".join(["player {} {}".format(j, str(p)) for j, p in enumerate(players)]))
+            player.conn.send("cards {} {}".format(player.id, " ".join([str(hash(card)) for card in player.cards])))
 
 if __name__ == "__main__":
     hearts = Hearts()
