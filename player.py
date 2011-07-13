@@ -69,19 +69,20 @@ class PlayerGUI(threading.Thread):
         if len(self.raised_cards) < self.max_raised_cards:
             event.widget.move(card, 0, -20)
             event.widget.tag_bind(card, "<Button-1>", lambda x, y=(card, id_card,):self.lower_card(x, *y))
-            self.raised_cards.append(id_card)
+            self.raised_cards.append((id_card, card,))
             if len(self.raised_cards) >= self.max_raised_cards:
                 self.player_btn.config(state=ACTIVE)
 
     def lower_card(self, event, card, id_card):
         event.widget.move(card, 0, 20)
         event.widget.tag_bind(card, "<Button-1>", lambda x, y=(card, id_card,):self.lift_card(x, *y))
-        self.raised_cards.remove(id_card)
+        self.raised_cards.remove((id_card, card,))
         self.player_btn.config(state=DISABLED)
 
     def pass_left(self):
-        self.player_btn.config(state=DISABLED)
-        self.conn.send("pass {} {}".format(self.id, " ".join(self.raised_cards)))
+        self.player_btn.config(text='Play', state=DISABLED)
+        self.conn.send("pass {} {}".format(self.id, " ".join([raised_card[0] for raised_card in self.raised_cards])))
+        self.max_raised_cards = 1
 
     def quit(self):
         self.conn.send("quit {}".format(self.id))
@@ -117,12 +118,15 @@ class PlayerGUI(threading.Thread):
                         self.players[int(line[1])].id = line[2]
                     elif line[0] == "cards":
                         player_canvas = self.get_player_canvas(line[1])
-                        for i, card in enumerate(line[2:]):
+                        for i, card in enumerate(line[2:15]):
                             player_card = player_canvas.cards[i]
                             player_canvas.canvas.itemconfig(player_card, image=self.cards[int(card)])
                             if self.id == player_canvas.id:
                                 player_canvas.canvas.tag_bind(player_card, "<Button-1>",
                                                               lambda x, y=(player_card, card,):self.lift_card(x, *y))
+                        for raised_card in self.raised_cards:
+                            self.players[0].canvas.move(raised_card[1], 0, 20)
+                            self.raised_cards.remove(raised_card)
                     elif line[0] == "quit":
                         player_canvas = self.get_player_canvas(line[1])
                         player_canvas.canvas.delete(ALL)

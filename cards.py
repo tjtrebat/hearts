@@ -18,6 +18,9 @@ class Card:
     def __hash__(self):
         return hash(self.rank) ^ hash(self.suit)
 
+    def __eq__(self, other):
+        return self.rank == other.rank and self.suit == other.suit
+
     def __lt__(self, other):
         return self.__cmp__(other) < 0
 

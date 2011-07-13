@@ -26,7 +26,8 @@ class Hearts:
         self.players = []
         self.max_players = 4
         self.in_game = False
-        self.player_turn = 0
+        self.player_index = 0
+        self.turn = 0
         self.line_num = 0
         update = multiprocessing.Process(target=self.update_server)
         update.start()
@@ -43,6 +44,20 @@ class Hearts:
     def send_player_cards(self, player):
         player.cards = sorted(player.cards)
         player.conn.send("cards {} {}".format(player.id, " ".join([str(hash(card)) for card in player.cards])))
+
+    def cards_passed(self):
+        cards_passed = True
+        for player in self.players:
+            if not player.has_passed:
+                cards_passed = False
+        return cards_passed
+
+    def turn(self):
+        if not self.turn:
+            card = Card(2, 'Club')
+            for i, player in enumerate(self.players):
+                if card in player.cards:
+                    self.player_index = i
 
     def get_player(self, id):
         player = None
@@ -82,10 +97,10 @@ class Hearts:
                                     if str(hash(card)) in line[2:]:
                                         player.cards.remove(card)
                                         next_player.cards.append(card)
-                                if len(list(filter(lambda p: p.has_passed, self.players))) >= self.max_players:
+                                if self.cards_passed():
                                     for p in self.players:
                                         self.send_player_cards(p)
-                                #next_player.conn.send("")
+                                    self.turn()
                             elif line[0] == "quit":
                                 self.players.remove(player)
                                 for p in self.players:
