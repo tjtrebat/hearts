@@ -40,6 +40,3 @@ class HeartsServer(asyncore.dispatcher):
             sock, addr = pair
             print('Incoming connection from %s' % repr(addr))
             self.handler = HeartsHandler(self.file_name, sock)
-
-    def get_data(self):
-        return self.handler.data

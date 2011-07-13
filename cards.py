@@ -18,6 +18,26 @@ class Card:
     def __hash__(self):
         return hash(self.rank) ^ hash(self.suit)
 
+    def __lt__(self, other):
+        return self.__cmp__(other) < 0
+
+    def __le__(self, other):
+        return self.__cmp__(other) <= 0
+
+    def __gt__(self, other):
+        return self.__cmp__(other) > 0
+
+    def __ge__(self, other):
+        return self.__cmp__(other) >= 0
+
+    def __cmp__(self, other):
+        suits = ('Club', 'Diamond', 'Spade', 'Heart',)
+        ranks = [str(i) for i in range(2, 11)] + ['Jack', 'Queen', 'King', 'Ace']
+        if self.suit == other.suit:
+            return ranks.index(self.rank) - ranks.index(other.rank)
+        else:
+            return suits.index(self.suit) - suits.index(other.suit)
+
     def __str__(self):
         return '{} of {}s'.format(self.rank, self.suit)
 

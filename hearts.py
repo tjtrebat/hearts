@@ -11,6 +11,7 @@ class HeartsPlayer(Hand):
         super(HeartsPlayer, self).__init__()
         self.id = id
         self.conn = conn
+        self.has_passed = False
 
     def __eq__(self, other):
         return self.id == other.id
@@ -37,7 +38,11 @@ class Hearts:
         for i, player in enumerate(self.players):
             players = self.players[i:len(self.players)] + self.players[0:i]
             player.conn.send("\n".join(["player {} {}".format(j, str(p)) for j, p in enumerate(players)]))
-            player.conn.send("cards {} {}".format(player.id, " ".join([str(hash(card)) for card in player.cards])))
+            self.send_player_cards(player)
+
+    def send_player_cards(self, player):
+        player.cards = sorted(player.cards)
+        player.conn.send("cards {} {}".format(player.id, " ".join([str(hash(card)) for card in player.cards])))
 
     def get_player(self, id):
         player = None
@@ -70,9 +75,16 @@ class Hearts:
                                         self.in_game = True
                         else:
                             if line[0] == "pass":
-                                pass
-
-                                #next_player = self.players[(self.players.index(player) + 1) % len(self.players)]
+                                player = self.players[self.players.index(player)]
+                                player.has_passed = True
+                                next_player = self.players[(self.players.index(player) + 1) % len(self.players)]
+                                for card in player.cards:
+                                    if str(hash(card)) in line[2:]:
+                                        player.cards.remove(card)
+                                        next_player.cards.append(card)
+                                if len(list(filter(lambda p: p.has_passed, self.players))) >= self.max_players:
+                                    for p in self.players:
+                                        self.send_player_cards(p)
                                 #next_player.conn.send("")
                             elif line[0] == "quit":
                                 self.players.remove(player)

@@ -69,21 +69,19 @@ class PlayerGUI(threading.Thread):
         if len(self.raised_cards) < self.max_raised_cards:
             event.widget.move(card, 0, -20)
             event.widget.tag_bind(card, "<Button-1>", lambda x, y=(card, id_card,):self.lower_card(x, *y))
-            self.raised_cards.append((id_card, card,))
+            self.raised_cards.append(id_card)
             if len(self.raised_cards) >= self.max_raised_cards:
                 self.player_btn.config(state=ACTIVE)
 
     def lower_card(self, event, card, id_card):
         event.widget.move(card, 0, 20)
         event.widget.tag_bind(card, "<Button-1>", lambda x, y=(card, id_card,):self.lift_card(x, *y))
-        self.raised_cards.remove((id_card, card,))
+        self.raised_cards.remove(id_card)
         self.player_btn.config(state=DISABLED)
 
     def pass_left(self):
-        for raised_card in self.raised_cards:
-            self.players[0].canvas.move(raised_card[1], 0, 20)
         self.player_btn.config(state=DISABLED)
-        self.conn.send("pass {} {}".format(self.id, " ".join([raised_card[0] for raised_card in self.raised_cards])))
+        self.conn.send("pass {} {}".format(self.id, " ".join(self.raised_cards)))
 
     def quit(self):
         self.conn.send("quit {}".format(self.id))
