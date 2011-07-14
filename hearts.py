@@ -25,12 +25,50 @@ class Hearts:
         self.deck.shuffle()
         self.players = []
         self.max_players = 4
-        self.in_game = False
         self.player_index = 0
-        self.turn = 0
+        self.round = 0
         self.line_num = 0
         update = multiprocessing.Process(target=self.update_server)
         update.start()
+
+    def add_player(self, player, host, port):
+        if player not in self.players:
+            player.conn = Client(host, port)
+            self.players.append(player)
+            if len(self.players) >= self.max_players:
+                self.new_game()
+
+    def remove_player(self, player):
+        self.players.remove(player)
+        for p in self.players:
+            p.conn.send("quit {}".format(player.id))
+
+    def pass_cards(self, player, cards):
+        player.has_passed = True
+        player_index = self.players.index(player)
+        if not self.round % 4:
+            player_index = (player_index + 1) % len(self.players)
+        elif self.round < 2:
+            player_index -= 1
+            if player_index < 0:
+                player_index = len(self.players) - 1
+        elif self.round < 3:
+            player_index = (player_index + 2) % len(self.players)
+        for card in player.cards:
+            if str(hash(card)) in cards:
+                player.cards.remove(card)
+                self.players[player_index].cards.append(card)
+
+    def passed_all_cards(self):
+        passed = True
+        for player in self.players:
+            if not player.has_passed:
+                passed = False
+        return passed
+
+    def send_player_cards(self, player):
+        player.cards = sorted(player.cards)
+        player.conn.send("cards {} {}".format(player.id, " ".join([str(hash(card)) for card in player.cards])))
 
     def new_game(self):
         for i in range(13):
@@ -38,34 +76,24 @@ class Hearts:
                 player.add(self.deck.pop())
         for i, player in enumerate(self.players):
             players = self.players[i:len(self.players)] + self.players[0:i]
-            player.conn.send("\n".join(["player {} {}".format(j, str(p)) for j, p in enumerate(players)]))
+            player.conn.send("\n".join(["player {}".format(str(p)) for p in players]))
             self.send_player_cards(player)
 
-    def send_player_cards(self, player):
-        player.cards = sorted(player.cards)
-        player.conn.send("cards {} {}".format(player.id, " ".join([str(hash(card)) for card in player.cards])))
-
-    def cards_passed(self):
-        cards_passed = True
-        for player in self.players:
-            if not player.has_passed:
-                cards_passed = False
-        return cards_passed
-
-    def turn(self):
-        if not self.turn:
-            card = Card(2, 'Club')
+    def next_turn(self):
+        if not self.round:
+            card = Card('2', 'Club')
             for i, player in enumerate(self.players):
                 if card in player.cards:
                     self.player_index = i
-
+        self.players[self.player_index].conn.send("turn")
+                
     def get_player(self, id):
         player = None
         for p in self.players:
             if id == p.id:
                 player = p
         return player
-        
+
     def run_server(self):
         server = HeartsServer("localhost", 50007, "hearts.p")
 
@@ -80,31 +108,17 @@ class Hearts:
                     line = HeartsHandler.load_data(line)
                     if len(line):
                         player = HeartsPlayer(line[1])
-                        if not self.in_game:
-                            if line[0] == "join":
-                                if player not in self.players:
-                                    player.conn = Client(line[2], int(line[3]))
-                                    self.players.append(player)
-                                    if len(self.players) >= self.max_players:
-                                        self.new_game()
-                                        self.in_game = True
-                        else:
-                            if line[0] == "pass":
-                                player = self.players[self.players.index(player)]
-                                player.has_passed = True
-                                next_player = self.players[(self.players.index(player) + 1) % len(self.players)]
-                                for card in player.cards:
-                                    if str(hash(card)) in line[2:]:
-                                        player.cards.remove(card)
-                                        next_player.cards.append(card)
-                                if self.cards_passed():
-                                    for p in self.players:
-                                        self.send_player_cards(p)
-                                    self.turn()
-                            elif line[0] == "quit":
-                                self.players.remove(player)
+                        if line[0] == "join":
+                            self.add_player(player, line[2], int(line[3]))
+                        elif line[0] == "pass":
+                            player = self.players[self.players.index(player)]
+                            self.pass_cards(player, line[2:])
+                            if self.passed_all_cards():
                                 for p in self.players:
-                                    p.conn.send("quit {}".format(player.id))
+                                    self.send_player_cards(p)
+                                self.next_turn()
+                        elif line[0] == "quit":
+                            self.remove_player(player)
                         self.line_num += 1
                 data.close()
             time.sleep(5)
