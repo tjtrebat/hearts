@@ -27,6 +27,7 @@ class Hearts:
         self.max_players = 4
         self.player_index = 0
         self.round = 0
+        self.cards_played = 0
         self.line_num = 0
         update = multiprocessing.Process(target=self.update_server)
         update.start()
@@ -42,6 +43,26 @@ class Hearts:
         self.players.remove(player)
         for p in self.players:
             p.conn.send("quit {}".format(player.id))
+
+    def new_game(self):
+        for i in range(13):
+            for player in self.players:
+                player.add(self.deck.pop())
+        for i, player in enumerate(self.players):
+            players = self.players[i:len(self.players)] + self.players[0:i]
+            player.conn.send("\n".join(["player {}".format(str(p)) for p in players]))
+            self.send_player_cards(player)
+
+    def next_turn(self):
+        if not self.cards_played:
+            card = Card('2', 'Club')
+            for i, player in enumerate(self.players):
+                if card in player.cards:
+                    self.player_index = i
+        else:
+            self.player_index = (self.player_index + 1) % len(self.players)
+        player = self.players[self.player_index]
+        player.conn.send("turn {}".format(player.id))
 
     def pass_cards(self, player, cards):
         player.has_passed = True
@@ -69,24 +90,6 @@ class Hearts:
     def send_player_cards(self, player):
         player.cards = sorted(player.cards)
         player.conn.send("cards {} {}".format(player.id, " ".join([str(hash(card)) for card in player.cards])))
-
-    def new_game(self):
-        for i in range(13):
-            for player in self.players:
-                player.add(self.deck.pop())
-        for i, player in enumerate(self.players):
-            players = self.players[i:len(self.players)] + self.players[0:i]
-            player.conn.send("\n".join(["player {}".format(str(p)) for p in players]))
-            self.send_player_cards(player)
-
-    def next_turn(self):
-        if not self.round:
-            card = Card('2', 'Club')
-            for i, player in enumerate(self.players):
-                if card in player.cards:
-                    self.player_index = i
-        player = self.players[self.player_index]
-        player.conn.send("turn {}".format(player.id))
                 
     def get_player(self, id):
         player = None
@@ -121,6 +124,8 @@ class Hearts:
                         elif line[0] == "play":
                             for p in self.players:
                                 p.conn.send(" ".join(line))
+                            self.cards_played += 1
+                            self.next_turn()
                         elif line[0] == "quit":
                             self.remove_player(player)
                         self.line_num += 1
