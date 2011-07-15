@@ -14,12 +14,8 @@ class PlayerCanvas:
     def __init__(self, root, position):
         self.id = ""
         self.canvas = Canvas(root, width=325, height=135)
-        self.cards = []
-        self.images = []
         self.position = position
-
-    def get_image(self, card):
-        return self.images[self.cards.index(card)]
+        self.cards = []
         
     def get_position(self):
         positions = ((500, 600), (160, 330), (500, 60), (850, 330),)
@@ -39,10 +35,10 @@ class PlayerGUI(threading.Thread):
         self.face_down_image = PhotoImage(file="cards/b1fv.gif")
         self.cards = self.get_cards()
         self.id = str(uuid.uuid4())
-        self.hand = 0
         self.players_added = 0
         self.raised_cards = []
         self.max_raised_cards = 3
+        self.in_turn = True
         self.add_widgets()
         self.add_canvas_widgets()
         self.HOST, self.PORT = "localhost", random.randint(1000, 60000)
@@ -65,9 +61,9 @@ class PlayerGUI(threading.Thread):
         for position in range(4):
             player_canvas = PlayerCanvas(self.canvas, position)
             for i in range(13):
-                player_canvas.images.append(player_canvas.canvas.create_image(20 * i + 5, 70,
+                player_canvas.cards.append((None, player_canvas.canvas.create_image(20 * i + 5, 70,
                                                                              image=self.face_down_image,
-                                                                             anchor=W))
+                                                                             anchor=W),))
             self.canvas.create_window(player_canvas.get_position(), window=player_canvas.canvas)
             self.players.append(player_canvas)
 
@@ -75,27 +71,43 @@ class PlayerGUI(threading.Thread):
         if len(self.raised_cards) < self.max_raised_cards:
             event.widget.move(image, 0, -20)
             event.widget.tag_bind(image, "<Button-1>", lambda x, y=(image, card,):self.lower_card(x, *y))
-            self.raised_cards.append(card)
-            if len(self.raised_cards) >= self.max_raised_cards:
+            self.raised_cards.append((card, image,))
+            if len(self.raised_cards) >= self.max_raised_cards and self.in_turn:
                 self.player_btn.config(state=ACTIVE)
 
     def lower_card(self, event, image, card):
         event.widget.move(image, 0, 20)
         event.widget.tag_bind(image, "<Button-1>", lambda x, y=(image, card,):self.lift_card(x, *y))
-        self.raised_cards.remove(card)
+        self.raised_cards.remove((card, image,))
         self.player_btn.config(state=DISABLED)
 
     def pass_cards(self):
-        self.player_btn.config(text='Play', command=lambda:None, state=DISABLED)
+        self.unbind_images()
+        self.player_btn.config(text='Play', state=DISABLED)
         self.conn.send("pass {} {}".format(self.id, " ".join([str(hash(card)) for card in self.raised_cards])))
         self.max_raised_cards = 1
+        self.in_turn = False
 
-    def play_2_of_clubs(self):
-        print("PLAY TWO OF CLUBS!")
+    def play_card(self):
+        print("PLAY CARD")
+        self.unbind_images()
+        self.player_btn.config(state=DISABLED)
+        self.in_turn = False
 
     def quit(self):
         self.conn.send("quit {}".format(self.id))
         self.root.destroy()
+
+    def bind_images(self):
+        player = self.players[0]
+        for card, image in player.cards:
+            player.canvas.tag_bind(image, "<Button-1>",
+                                   lambda x, y=(image, card,):self.lift_card(x, *y))
+
+    def unbind_images(self):
+        player = self.players[0]
+        for card in player.cards:
+            player.canvas.tag_unbind(card[1], "<Button-1>")
 
     def get_card(self, id):
         card = None
@@ -136,20 +148,21 @@ class PlayerGUI(threading.Thread):
                     elif line[0] == "cards":
                         player_canvas = self.get_player_canvas(line[1])
                         for card in self.raised_cards:
-                            player_canvas.canvas.move(player_canvas.get_image(card), 0, 20)
+                            player_canvas.canvas.move(card[1], 0, 20)
                         self.raised_cards = []
-                        player_canvas.cards = []
                         for i, card in enumerate(line[2:15]):
                             card = self.get_card(int(card))
-                            player_canvas.cards.append(card)
-                            player_card = player_canvas.images[i]
-                            player_canvas.canvas.itemconfig(player_card, image=self.cards[hash(card)])
-                            if self.id == player_canvas.id:
-                                player_canvas.canvas.tag_bind(player_card, "<Button-1>",
-                                                       lambda x, y=(player_card, card,):self.lift_card(x, *y))
+                            player_card = player_canvas.cards[i]
+                            player_card = (card, player_card[1],)
+                            player_canvas.cards[i] = player_card
+                            player_canvas.canvas.itemconfig(player_canvas.cards[i][1], image=self.cards[hash(card)])
+                        if self.id == player_canvas.id and self.max_raised_cards >= 3:
+                            self.bind_images()
                     elif line[0] == "turn":
+                        self.bind_images()
                         if len(line) < 2:
-                            self.player_btn.config(command=self.play_2_of_clubs)
+                            self.player_btn.config(command=self.play_card)
+                        self.in_turn = True
                     elif line[0] == "quit":
                         player_canvas = self.get_player_canvas(line[1])
                         player_canvas.canvas.delete(ALL)
