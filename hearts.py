@@ -85,7 +85,8 @@ class Hearts:
             for i, player in enumerate(self.players):
                 if card in player.cards:
                     self.player_index = i
-        self.players[self.player_index].conn.send("turn")
+        player = self.players[self.player_index]
+        player.conn.send("turn {}".format(player.id))
                 
     def get_player(self, id):
         player = None
@@ -118,7 +119,8 @@ class Hearts:
                                     self.send_player_cards(p)
                                 self.next_turn()
                         elif line[0] == "play":
-                            pass
+                            for p in self.players:
+                                p.conn.send(" ".join(line))
                         elif line[0] == "quit":
                             self.remove_player(player)
                         self.line_num += 1
