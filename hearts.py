@@ -117,6 +117,8 @@ class Hearts:
                                 for p in self.players:
                                     self.send_player_cards(p)
                                 self.next_turn()
+                        elif line[0] == "play":
+                            pass
                         elif line[0] == "quit":
                             self.remove_player(player)
                         self.line_num += 1

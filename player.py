@@ -31,10 +31,10 @@ class PlayerGUI(threading.Thread):
         self.canvas = Canvas(self.root, width=1000, height=650)
         self.player_frame = Frame(self.root)
         self.player_btn = Button(self.player_frame, text='Pass Left', command=self.pass_cards, state=DISABLED)
-        self.players = []
         self.face_down_image = PhotoImage(file="cards/b1fv.gif")
         self.cards = self.get_cards()
         self.id = str(uuid.uuid4())
+        self.players = []
         self.players_added = 0
         self.raised_cards = []
         self.max_raised_cards = 3
@@ -84,12 +84,16 @@ class PlayerGUI(threading.Thread):
     def pass_cards(self):
         self.unbind_images()
         self.player_btn.config(text='Play', state=DISABLED)
-        self.conn.send("pass {} {}".format(self.id, " ".join([str(hash(card)) for card in self.raised_cards])))
+        self.conn.send("pass {} {}".format(self.id, " ".join([str(hash(card[0])) for card in self.raised_cards])))
         self.max_raised_cards = 1
         self.in_turn = False
 
     def play_card(self):
-        print("PLAY CARD")
+        player = self.players[0]
+        card, image = self.raised_cards.pop()
+        player.canvas.delete(image)
+        player.cards.remove((card, image,))
+        self.conn.send("play {} {}".format(self.id, str(hash(card))))
         self.unbind_images()
         self.player_btn.config(state=DISABLED)
         self.in_turn = False
@@ -109,6 +113,13 @@ class PlayerGUI(threading.Thread):
         for card in player.cards:
             player.canvas.tag_unbind(card[1], "<Button-1>")
 
+    def get_player_canvas(self, id):
+        player_canvas = None
+        for player in self.players:
+            if id == player.id:
+                player_canvas = player
+        return player_canvas
+
     def get_card(self, id):
         card = None
         for c in Deck():
@@ -122,13 +133,6 @@ class PlayerGUI(threading.Thread):
         for card in deck:
             cards[hash(card)] = PhotoImage(file=card.image)
         return cards
-    
-    def get_player_canvas(self, id):
-        player_canvas = None
-        for player in self.players:
-            if id == player.id:
-                player_canvas = player
-        return player_canvas
 
     def run(self):
         server = HeartsServer(self.HOST, self.PORT, "{}.p".format(self.id))
