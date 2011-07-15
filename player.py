@@ -43,8 +43,7 @@ class PlayerGUI(threading.Thread):
         self.players_added = 0
         self.raised_cards = []
         self.max_raised_cards = 3
-        self.cards_played = 0
-        self.round = 1
+        self.turn = 0
         self.in_turn = True
         self.add_widgets()
         self.add_canvas_widgets()
@@ -79,14 +78,14 @@ class PlayerGUI(threading.Thread):
         self.player_btn.config(text='Play', state=DISABLED)
         self.conn.send("pass {} {}".format(self.id, " ".join([str(hash(card[0])) for card in self.raised_cards])))
         self.max_raised_cards = 1
-        self.cards_played += 3
+
         self.in_turn = False
 
     def play_card(self):
         card, image = self.raised_cards.pop()
         player = self.players[0]
         valid_card = True
-        if self.round <= 1 and self.cards_played <= 3:
+        if not self.turn:
             if Card('2', 'Club') != card:
                 player.canvas.move(image, 0, 20)
                 player.canvas.tag_bind(image, "<Button-1>",
@@ -99,7 +98,6 @@ class PlayerGUI(threading.Thread):
             self.conn.send("play {} {}".format(self.id, str(hash(card))))
             self.unbind_images()
             self.player_btn.config(state=DISABLED)
-            self.cards_played += 1
             self.in_turn = False
 
     def quit(self):
@@ -186,6 +184,7 @@ class PlayerGUI(threading.Thread):
                         self.in_turn = True
                     elif line[0] == "play":
                         self.canvas.create_image(player_canvas.get_card_position(), image=self.cards[int(line[2])])
+                        self.turn += 1
                     elif line[0] == "quit":
                         player_canvas.canvas.delete(ALL)
                     self.line_num += 1
