@@ -14,7 +14,7 @@ class HeartsPlayer(Hand):
         self.has_passed = False
 
     def get_card_ids(self):
-        return [str(hash(card)) for card in self.cards]
+        return [str(hash(card)) for card in sorted(self.cards)]
 
     def __eq__(self, other):
         return self.id == other.id
@@ -32,6 +32,7 @@ class Hearts:
         self.round = 0
         self.cards_played = 0
         self.suit_played = ''
+        self.table_cards = {}
         self.line_num = 0
         update = multiprocessing.Process(target=self.update_server)
         update.start()
@@ -128,12 +129,23 @@ class Hearts:
                                     p.conn.send("cards {} {}".format(p.id, " ".join(p.get_card_ids())))
                                 self.next_turn()
                         elif line[0] == "play":
+                            card = Deck().get_card(int(line[2]))
+                            self.table_cards[line[1]] = card
                             self.send_players(" ".join(line))
                             self.cards_played += 1
                             if not self.cards_played % 4:
-                                pass
+                                player_id = None
+                                highest_rank = 0
+                                ranks = [str(i) for i in range(2, 11)] + ['Jack', 'Queen', 'King', 'Ace']
+                                for key, value in self.table_cards.items():
+                                    rank = ranks.index(value.rank)
+                                    if value.suit == self.suit_played and rank >= highest_rank:
+                                        player_id = key
+                                        highest_rank = rank
+                                print("Winning Player: " + player_id)
+                                self.table_cards = {}
                             elif self.cards_played % 4 <= 1:
-                                pass #self.suit_played =
+                                self.suit_played = card.suit
                             self.next_turn()
                         elif line[0] == "quit":
                             self.remove_player(player)

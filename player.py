@@ -86,7 +86,7 @@ class PlayerGUI(threading.Thread):
         player = self.players[0]
         raised_card = self.raised_cards.pop()
         card, image = raised_card
-        if self.is_valid_card(card):
+        if self.validate_card(card):
             player.canvas.delete(image)
             player.cards.remove(raised_card)
             self.conn.send("play {} {}".format(self.id, str(hash(card))))
@@ -96,29 +96,32 @@ class PlayerGUI(threading.Thread):
         else:
             player.canvas.move(image, 0, 20)
             player.canvas.tag_bind(image, "<Button-1>",
-                                   lambda x, y=raised_card:self.lift_card(x, *y))
-            tkinter.messagebox.showinfo("Invalid Choice", "You must start with the Two of Clubs.")
+                                               lambda x, y=raised_card:self.lift_card(x, *y))
             self.player_btn.config(state=DISABLED)
 
-    def is_valid_card(self, card):
+    def validate_card(self, card):
         is_valid = True
         if not self.turn and Card('2', 'Club') != card:
+            tkinter.messagebox.showinfo("Invalid Choice", "You must start with the Two of Clubs.")
             is_valid = False
         elif self.suit_played.strip():
-            if self.suit_played in [c.suit for c in self.players[0].cards] and card.suit != self.suit_played:
+            if self.suit_played in [c[0].suit for c in self.players[0].cards] and card.suit != self.suit_played:
+                tkinter.messagebox.showinfo("Invalid Choice", "You must follow suit.")
                 is_valid = False
         return is_valid
 
     def add_table_card(self, card):
         self.turn += 1
         if not self.turn % 4:
-            self.canvas.after(5000, self.remove_table_cards)
+            self.canvas.after(3000, self.remove_table_cards)
+            self.suit_played = ''
+        elif self.turn % 4 <= 1:
+            self.suit_played = card[0].suit
         self.table_cards.append(card)
 
     def remove_table_cards(self):
         while len(self.table_cards):
-            self.canvas.delete(self.table_cards.pop()[0])
-        self.suit_played = ''
+            self.canvas.delete(self.table_cards.pop()[1])
 
     def quit(self):
         self.conn.send("quit {}".format(self.id))
@@ -199,7 +202,6 @@ class PlayerGUI(threading.Thread):
                         self.in_turn = True
                     elif line[0] == "play":
                         card = Deck().get_card(int(line[2]))
-                        self.suit_played = card.suit
                         self.add_table_card((card, self.canvas.create_image(player_canvas.get_card_position(),
                                                                             image=self.cards[hash(card)]),))
                     elif line[0] == "quit":
