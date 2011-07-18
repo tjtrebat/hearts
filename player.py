@@ -45,6 +45,7 @@ class PlayerGUI(threading.Thread):
         self.max_raised_cards = 3
         self.turn = 0
         self.in_turn = True
+        self.table_cards = []
         self.add_widgets()
         self.add_canvas_widgets()
         self.HOST, self.PORT = "localhost", random.randint(1000, 60000)
@@ -78,7 +79,6 @@ class PlayerGUI(threading.Thread):
         self.player_btn.config(text='Play', state=DISABLED)
         self.conn.send("pass {} {}".format(self.id, " ".join([str(hash(card[0])) for card in self.raised_cards])))
         self.max_raised_cards = 1
-
         self.in_turn = False
 
     def play_card(self):
@@ -91,6 +91,7 @@ class PlayerGUI(threading.Thread):
                 player.canvas.tag_bind(image, "<Button-1>",
                                        lambda x, y=(image, card,):self.lift_card(x, *y))
                 tkinter.messagebox.showinfo("Invalid Choice", "You must start with the Two of Clubs.")
+                self.player_btn.config(state=DISABLED)
                 valid_card = False
         if valid_card:
             player.canvas.delete(image)
@@ -99,6 +100,16 @@ class PlayerGUI(threading.Thread):
             self.unbind_images()
             self.player_btn.config(state=DISABLED)
             self.in_turn = False
+
+    def add_table_card(self, player, card):
+        self.table_cards.append(self.canvas.create_image(player.get_card_position(), image=card))
+        self.turn += 1
+        if not self.turn % 4:
+            self.canvas.after(5000, self.remove_table_cards)
+
+    def remove_table_cards(self):
+        while len(self.table_cards):
+            self.canvas.delete(self.table_cards.pop())
 
     def quit(self):
         self.conn.send("quit {}".format(self.id))
@@ -183,8 +194,7 @@ class PlayerGUI(threading.Thread):
                         self.player_btn.config(command=self.play_card)
                         self.in_turn = True
                     elif line[0] == "play":
-                        self.canvas.create_image(player_canvas.get_card_position(), image=self.cards[int(line[2])])
-                        self.turn += 1
+                        self.add_table_card(player_canvas, self.cards[int(line[2])])
                     elif line[0] == "quit":
                         player_canvas.canvas.delete(ALL)
                     self.line_num += 1

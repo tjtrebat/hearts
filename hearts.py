@@ -13,6 +13,9 @@ class HeartsPlayer(Hand):
         self.conn = conn
         self.has_passed = False
 
+    def get_card_ids(self):
+        return [str(hash(card)) for card in self.cards]
+
     def __eq__(self, other):
         return self.id == other.id
 
@@ -51,7 +54,7 @@ class Hearts:
         for i, player in enumerate(self.players):
             players = self.players[i:len(self.players)] + self.players[0:i]
             player.conn.send("\n".join(["player {}".format(str(p)) for p in players]))
-            self.send_player_cards(player)
+            player.conn.send("cards {} {}".format(player.id, " ".join(player.get_card_ids())))
 
     def next_turn(self):
         if not self.cards_played:
@@ -67,18 +70,20 @@ class Hearts:
     def pass_cards(self, player, cards):
         player.has_passed = True
         player_index = self.players.index(player)
-        if not self.round % 4:
+        if not self.round:
             player_index = (player_index + 1) % len(self.players)
-        elif self.round < 2:
+        elif self.round % 4 < 2:
             player_index -= 1
             if player_index < 0:
                 player_index = len(self.players) - 1
-        elif self.round < 3:
+        elif self.round % 4 < 3:
             player_index = (player_index + 2) % len(self.players)
+        other_player = self.players[player_index]
         for card in player.cards:
             if str(hash(card)) in cards:
-                player.cards.remove(card)
-                self.players[player_index].cards.append(card)
+                player.remove(card)
+                other_player.add(card)
+        other_player.cards = sorted(other_player.cards)
 
     def passed_all_cards(self):
         passed = True
@@ -87,10 +92,10 @@ class Hearts:
                 passed = False
         return passed
 
-    def send_player_cards(self, player):
-        player.cards = sorted(player.cards)
-        player.conn.send("cards {} {}".format(player.id, " ".join([str(hash(card)) for card in player.cards])))
-                
+    def send_players(self, data):
+        for player in self.players:
+            player.conn.send(data)
+
     def get_player(self, id):
         player = None
         for p in self.players:
@@ -119,12 +124,13 @@ class Hearts:
                             self.pass_cards(player, line[2:])
                             if self.passed_all_cards():
                                 for p in self.players:
-                                    self.send_player_cards(p)
+                                    p.conn.send("cards {} {}".format(p.id, " ".join(p.get_card_ids())))
                                 self.next_turn()
                         elif line[0] == "play":
-                            for p in self.players:
-                                p.conn.send(" ".join(line))
+                            self.send_players(" ".join(line))
                             self.cards_played += 1
+                            if not self.cards_played % 4:
+                                pass
                             self.next_turn()
                         elif line[0] == "quit":
                             self.remove_player(player)

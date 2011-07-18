@@ -79,5 +79,8 @@ class Hand(object):
     def add(self, card):
         self.cards.append(card)
 
+    def remove(self, card):
+        self.cards.remove(card)
+
     def __str__(self):
         return ','.join([str(card) for card in self.cards])
