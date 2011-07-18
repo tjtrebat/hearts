@@ -4,7 +4,7 @@ import random
 
 class Card:
     def __init__(self, rank, suit):
-        self.rank = rank
+        self.rank = str(rank)
         self.suit = suit
         self.image = self.get_image()
 
@@ -62,6 +62,13 @@ class Deck:
                 for suit in ('Spade', 'Heart', 'Diamond', 'Club'):
                     cards.append(Card(str(rank), suit))
         return cards
+
+    def get_card(self, card_id):
+        card = None
+        for c in self.cards:
+            if card_id == hash(c):
+                card = c
+        return card
 
     def __getitem__(self, item):
         return self.cards[item]

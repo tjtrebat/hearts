@@ -42,10 +42,11 @@ class PlayerGUI(threading.Thread):
         self.players = []
         self.players_added = 0
         self.raised_cards = []
+        self.table_cards = []
         self.max_raised_cards = 3
         self.turn = 0
         self.in_turn = True
-        self.table_cards = []
+        self.suit_played = ''
         self.add_widgets()
         self.add_canvas_widgets()
         self.HOST, self.PORT = "localhost", random.randint(1000, 60000)
@@ -82,34 +83,42 @@ class PlayerGUI(threading.Thread):
         self.in_turn = False
 
     def play_card(self):
-        card, image = self.raised_cards.pop()
         player = self.players[0]
-        valid_card = True
-        if not self.turn:
-            if Card('2', 'Club') != card:
-                player.canvas.move(image, 0, 20)
-                player.canvas.tag_bind(image, "<Button-1>",
-                                       lambda x, y=(image, card,):self.lift_card(x, *y))
-                tkinter.messagebox.showinfo("Invalid Choice", "You must start with the Two of Clubs.")
-                self.player_btn.config(state=DISABLED)
-                valid_card = False
-        if valid_card:
+        raised_card = self.raised_cards.pop()
+        card, image = raised_card
+        if self.is_valid_card(card):
             player.canvas.delete(image)
-            player.cards.remove((card, image,))
+            player.cards.remove(raised_card)
             self.conn.send("play {} {}".format(self.id, str(hash(card))))
             self.unbind_images()
             self.player_btn.config(state=DISABLED)
             self.in_turn = False
+        else:
+            player.canvas.move(image, 0, 20)
+            player.canvas.tag_bind(image, "<Button-1>",
+                                   lambda x, y=raised_card:self.lift_card(x, *y))
+            tkinter.messagebox.showinfo("Invalid Choice", "You must start with the Two of Clubs.")
+            self.player_btn.config(state=DISABLED)
 
-    def add_table_card(self, player, card):
-        self.table_cards.append(self.canvas.create_image(player.get_card_position(), image=card))
+    def is_valid_card(self, card):
+        is_valid = True
+        if not self.turn and Card('2', 'Club') != card:
+            is_valid = False
+        elif self.suit_played.strip():
+            if self.suit_played in [c.suit for c in self.players[0].cards] and card.suit != self.suit_played:
+                is_valid = False
+        return is_valid
+
+    def add_table_card(self, card):
         self.turn += 1
         if not self.turn % 4:
             self.canvas.after(5000, self.remove_table_cards)
+        self.table_cards.append(card)
 
     def remove_table_cards(self):
         while len(self.table_cards):
-            self.canvas.delete(self.table_cards.pop())
+            self.canvas.delete(self.table_cards.pop()[0])
+        self.suit_played = ''
 
     def quit(self):
         self.conn.send("quit {}".format(self.id))
@@ -126,33 +135,28 @@ class PlayerGUI(threading.Thread):
         player = self.players[0]
         for card, image in player.cards:
             player.canvas.tag_bind(image, "<Button-1>",
-                                   lambda x, y=(image, card,):self.lift_card(x, *y))
+                                   lambda x, y=(card, image,):self.lift_card(x, *y))
 
     def unbind_images(self):
         player = self.players[0]
         for card in player.cards:
             player.canvas.tag_unbind(card[1], "<Button-1>")
 
-    def lift_card(self, event, image, card):
+    def lift_card(self, event, card, image):
+        card = (card, image,)
         if len(self.raised_cards) < self.max_raised_cards:
             event.widget.move(image, 0, -20)
-            event.widget.tag_bind(image, "<Button-1>", lambda x, y=(image, card,):self.lower_card(x, *y))
-            self.raised_cards.append((card, image,))
+            event.widget.tag_bind(image, "<Button-1>", lambda x, y=card:self.lower_card(x, *y))
+            self.raised_cards.append(card)
             if len(self.raised_cards) >= self.max_raised_cards and self.in_turn:
                 self.player_btn.config(state=ACTIVE)
 
-    def lower_card(self, event, image, card):
+    def lower_card(self, event, card, image):
+        card = (card, image,)
         event.widget.move(image, 0, 20)
-        event.widget.tag_bind(image, "<Button-1>", lambda x, y=(image, card,):self.lift_card(x, *y))
-        self.raised_cards.remove((card, image,))
+        event.widget.tag_bind(image, "<Button-1>", lambda x, y=card:self.lift_card(x, *y))
+        self.raised_cards.remove(card)
         self.player_btn.config(state=DISABLED)
-
-    def get_card(self, id):
-        card = None
-        for c in Deck():
-            if id == hash(c):
-                card = c
-        return card
 
     def get_cards(self):
         cards = {}
@@ -182,7 +186,7 @@ class PlayerGUI(threading.Thread):
                             player_canvas.canvas.move(card[1], 0, 20)
                         self.raised_cards = []
                         for i, card in enumerate(line[2:15]):
-                            card = self.get_card(int(card))
+                            card = Deck().get_card(int(card))
                             player_card = player_canvas.cards[i]
                             player_card = (card, player_card[1],)
                             player_canvas.cards[i] = player_card
@@ -194,7 +198,10 @@ class PlayerGUI(threading.Thread):
                         self.player_btn.config(command=self.play_card)
                         self.in_turn = True
                     elif line[0] == "play":
-                        self.add_table_card(player_canvas, self.cards[int(line[2])])
+                        card = Deck().get_card(int(line[2]))
+                        self.suit_played = card.suit
+                        self.add_table_card((card, self.canvas.create_image(player_canvas.get_card_position(),
+                                                                            image=self.cards[hash(card)]),))
                     elif line[0] == "quit":
                         player_canvas.canvas.delete(ALL)
                     self.line_num += 1

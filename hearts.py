@@ -31,6 +31,7 @@ class Hearts:
         self.player_index = 0
         self.round = 0
         self.cards_played = 0
+        self.suit_played = ''
         self.line_num = 0
         update = multiprocessing.Process(target=self.update_server)
         update.start()
@@ -131,6 +132,8 @@ class Hearts:
                             self.cards_played += 1
                             if not self.cards_played % 4:
                                 pass
+                            elif self.cards_played % 4 <= 1:
+                                pass #self.suit_played =
                             self.next_turn()
                         elif line[0] == "quit":
                             self.remove_player(player)
