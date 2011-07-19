@@ -123,10 +123,6 @@ class PlayerGUI(threading.Thread):
         while len(self.table_cards):
             self.canvas.delete(self.table_cards.pop()[1])
 
-    def quit(self):
-        self.conn.send("quit {}".format(self.id))
-        self.root.destroy()
-
     def get_player_canvas(self, id):
         player_canvas = None
         for player in self.players:
@@ -204,11 +200,21 @@ class PlayerGUI(threading.Thread):
                         card = Deck().get_card(int(line[2]))
                         self.add_table_card((card, self.canvas.create_image(player_canvas.get_card_position(),
                                                                             image=self.cards[hash(card)]),))
+                    elif line[0] == "round":
+                        for i, card_id in enumerate(line[2:15]):
+                            if self.id == player_canvas.id:
+                                player_canvas.cards.append((None, player_canvas.canvas.create_image(20 * i + 5, 70,
+                                                                                             anchor=W),))
+                            player_canvas.canvas.itemconfig(player_canvas.cards[i][1], image=self.cards[int(card_id)])
                     elif line[0] == "quit":
                         player_canvas.canvas.delete(ALL)
                     self.line_num += 1
             data.close()
-        self.root.after(5000, self.update_widgets)
+        self.root.after(5, self.update_widgets)
+
+    def quit(self):
+        self.conn.send("quit {}".format(self.id))
+        self.root.destroy()
 
 if __name__ == "__main__":
     root = Tk()
