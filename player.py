@@ -47,6 +47,7 @@ class PlayerGUI(threading.Thread):
         self.turn = 0
         self.in_turn = True
         self.suit_played = ''
+        self.points = []
         self.add_widgets()
         self.add_canvas_widgets()
         self.HOST, self.PORT = "localhost", random.randint(1000, 60000)
@@ -113,7 +114,7 @@ class PlayerGUI(threading.Thread):
     def add_table_card(self, card):
         self.turn += 1
         if not self.turn % 4:
-            self.canvas.after(3000, self.remove_table_cards)
+            self.canvas.after(2000, self.remove_table_cards)
             self.suit_played = ''
         elif self.turn % 4 <= 1:
             self.suit_played = card[0].suit
@@ -122,6 +123,13 @@ class PlayerGUI(threading.Thread):
     def remove_table_cards(self):
         while len(self.table_cards):
             self.canvas.delete(self.table_cards.pop()[1])
+
+    #def reset_cards(self, player):
+    #    for i, card in enumerate(player.cards):
+    #        if i > 12:
+    #            player.canvas.delete(card[1])
+    #        else:
+    #            player.canvas.itemconfig(card[1], image=self.face_down_image)
 
     def get_player_canvas(self, id):
         player_canvas = None
@@ -200,17 +208,30 @@ class PlayerGUI(threading.Thread):
                         card = Deck().get_card(int(line[2]))
                         self.add_table_card((card, self.canvas.create_image(player_canvas.get_card_position(),
                                                                             image=self.cards[hash(card)]),))
-                    elif line[0] == "round":
-                        for i, card_id in enumerate(line[2:15]):
-                            if self.id == player_canvas.id:
+                    elif line[0] == "points":
+                        self.points.append((player_canvas, int(line[2])))
+                        if len(self.points) <= 1:
+                            for i in range(13):
                                 player_canvas.cards.append((None, player_canvas.canvas.create_image(20 * i + 5, 70,
-                                                                                             anchor=W),))
-                            player_canvas.canvas.itemconfig(player_canvas.cards[i][1], image=self.cards[int(card_id)])
+                                                                                                    anchor=W),))
+                        elif len(self.points) >= 4:
+                            self.points = sorted(self.points, key=lambda point: point[1])
+                            top = Toplevel(self.root)
+                            for i, point in enumerate(self.points):
+                                Label(top, text=str(point[0])).grid(row=0, column=i)
+                                Label(top, text=point[1]).grid(row=1, column=i)
+                            self.points = []
+                        #for i, card_id in enumerate(line[2:]):
+                        #    if self.id == player_canvas.id:
+                        #        player_canvas.cards.append((None, player_canvas.canvas.create_image(20 * i + 5, 70,
+                        #                                                                     anchor=W),))
+                        #    player_canvas.canvas.itemconfig(player_canvas.cards[i][1], image=self.cards[int(card_id)])
+                        #player_canvas.canvas.after(5000, lambda x= player_canvas:self.reset_cards(x))
                     elif line[0] == "quit":
                         player_canvas.canvas.delete(ALL)
                     self.line_num += 1
             data.close()
-        self.root.after(5, self.update_widgets)
+        self.root.after(5000, self.update_widgets)
 
     def quit(self):
         self.conn.send("quit {}".format(self.id))

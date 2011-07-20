@@ -13,6 +13,7 @@ class HeartsPlayer(Hand):
         self.conn = conn
         self.has_passed = False
         self.trick_cards = []
+        self.points = 0
 
     def get_card_ids(self):
         return [str(hash(card)) for card in sorted(self.cards)]
@@ -63,7 +64,8 @@ class Hearts:
     def next_round(self):
         self.round += 1
         self.cards_played = 0
-        self.send_players("round {} {}".format(self.winner.id, " ".join(self.winner.get_trick_card_ids())))
+        self.send_players("\n".join(["points {} {}".format(player.id, player.points) for player in self.players]))
+        #self.send_players("round {} {}".format(self.winner.id, " ".join(self.winner.get_trick_card_ids())))
         for player in self.players:
             player.cards = []
             player.trick_cards = []
@@ -108,18 +110,25 @@ class Hearts:
     def take_trick(self):
         player_id = None
         highest_rank = 0
+        points = 0
         ranks = [str(i) for i in range(2, 11)] + ['Jack', 'Queen', 'King', 'Ace']
         for key, value in self.table_cards.items():
             rank = ranks.index(value.rank)
             if value.suit == self.suit_played and rank >= highest_rank:
                 player_id = key
                 highest_rank = rank
+            if value.suit == 'Heart':
+                points += 1
+            elif value.suit == 'Spade' and value.rank == 'Queen':
+                points += 13
         self.winner = self.get_player(player_id)
+        self.winner.points += points
         for card in self.table_cards.values():
             self.winner.trick_cards.append(card)
         self.player_index = self.players.index(self.winner) - 1
         if self.player_index < 0:
             self.player_index = len(self.players) - 1
+        self.table_cards = {}
 
     def send_players(self, data):
         for player in self.players:
@@ -164,7 +173,6 @@ class Hearts:
                                 self.take_trick()
                                 if self.cards_played >= 52:
                                     self.next_round()
-                                self.table_cards = {}
                             elif self.cards_played % 4 <= 1:
                                 self.suit_played = card.suit
                             self.next_turn()
