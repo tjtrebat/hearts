@@ -29,6 +29,9 @@ class PlayerCanvas:
     def __eq__(self, other):
         return self.id == other.id
 
+    def __str__(self):
+        return self.id
+
 class PlayerGUI(threading.Thread):
     def __init__(self, root):
         threading.Thread.__init__(self)
@@ -48,6 +51,8 @@ class PlayerGUI(threading.Thread):
         self.in_turn = True
         self.suit_played = ''
         self.points = []
+        self.hearts_broken = False
+        self.round = 0
         self.add_widgets()
         self.add_canvas_widgets()
         self.HOST, self.PORT = "localhost", random.randint(1000, 60000)
@@ -102,23 +107,17 @@ class PlayerGUI(threading.Thread):
 
     def validate_card(self, card):
         is_valid = True
-        if not self.turn and Card('2', 'Club') != card:
+        if not self.turn and Card("2", "Club") != card:
             tkinter.messagebox.showinfo("Invalid Choice", "You must start with the Two of Clubs.")
             is_valid = False
         elif self.suit_played.strip():
             if self.suit_played in [c[0].suit for c in self.players[0].cards] and card.suit != self.suit_played:
-                tkinter.messagebox.showinfo("Invalid Choice", "You must follow suit.")
+                tkinter.messagebox.showinfo("Play a {}".format(self.suit_played), "You must follow suit.")
                 is_valid = False
+        elif card.suit == "Heart" and not self.hearts_broken:
+            tkinter.messagebox.showinfo("Invalid Choice", "Cannot lead with Hearts until it has been broken.")
+            is_valid = False
         return is_valid
-
-    def add_table_card(self, card):
-        self.turn += 1
-        if not self.turn % 4:
-            self.canvas.after(2000, self.remove_table_cards)
-            self.suit_played = ''
-        elif self.turn % 4 <= 1:
-            self.suit_played = card[0].suit
-        self.table_cards.append(card)
 
     def remove_table_cards(self):
         while len(self.table_cards):
@@ -130,13 +129,6 @@ class PlayerGUI(threading.Thread):
     #            player.canvas.delete(card[1])
     #        else:
     #            player.canvas.itemconfig(card[1], image=self.face_down_image)
-
-    def get_player_canvas(self, id):
-        player_canvas = None
-        for player in self.players:
-            if id == player.id:
-                player_canvas = player
-        return player_canvas
 
     def bind_images(self):
         player = self.players[0]
@@ -164,6 +156,13 @@ class PlayerGUI(threading.Thread):
         event.widget.tag_bind(image, "<Button-1>", lambda x, y=card:self.lift_card(x, *y))
         self.raised_cards.remove(card)
         self.player_btn.config(state=DISABLED)
+
+    def get_player_canvas(self, id):
+        player_canvas = None
+        for player in self.players:
+            if id == player.id:
+                player_canvas = player
+        return player_canvas
 
     def get_cards(self):
         cards = {}
@@ -206,21 +205,37 @@ class PlayerGUI(threading.Thread):
                         self.in_turn = True
                     elif line[0] == "play":
                         card = Deck().get_card(int(line[2]))
-                        self.add_table_card((card, self.canvas.create_image(player_canvas.get_card_position(),
-                                                                            image=self.cards[hash(card)]),))
+                        self.turn += 1
+                        if not self.turn % 4:
+                            self.canvas.after(2000, self.remove_table_cards)
+                            self.suit_played = ''
+                        elif self.turn % 4 <= 1:
+                            self.suit_played = card.suit
+                        if card.suit == "Heart":
+                            self.hearts_broken = True
+                        self.table_cards.append((card, self.canvas.create_image(player_canvas.get_card_position(),
+                                                                                image=self.cards[hash(card)]),))
                     elif line[0] == "points":
                         self.points.append((player_canvas, int(line[2])))
-                        if len(self.points) <= 1:
-                            for i in range(13):
-                                player_canvas.cards.append((None, player_canvas.canvas.create_image(20 * i + 5, 70,
-                                                                                                    anchor=W),))
-                        elif len(self.points) >= 4:
+                        if len(self.points) >= 4:
                             self.points = sorted(self.points, key=lambda point: point[1])
                             top = Toplevel(self.root)
                             for i, point in enumerate(self.points):
                                 Label(top, text=str(point[0])).grid(row=0, column=i)
                                 Label(top, text=point[1]).grid(row=1, column=i)
                             self.points = []
+                            self.round += 1
+                            if not self.round % 4:
+                                pass
+                            else:
+                                self.max_raised_cards = 3
+                                self.in_turn = True
+                                self.player_btn.config(command=self.pass_cards)
+                        if self.id == player_canvas.id:
+                            for i in range(13):
+                                player_canvas.cards.append((None, player_canvas.canvas.create_image(20 * i + 5, 70,
+                                                                                                    image=self.face_down_image,
+                                                                                                    anchor=W),))
                         #for i, card_id in enumerate(line[2:]):
                         #    if self.id == player_canvas.id:
                         #        player_canvas.cards.append((None, player_canvas.canvas.create_image(20 * i + 5, 70,

@@ -48,9 +48,6 @@ class Hearts:
             player.conn = Client(host, port)
             self.players.append(player)
             if len(self.players) >= self.max_players:
-                for i in range(13):
-                    for player in self.players:
-                        player.add(self.deck.pop())
                 for i, player in enumerate(self.players):
                     players = self.players[i:len(self.players)] + self.players[0:i]
                     player.conn.send("\n".join(["player {}".format(str(p)) for p in players]))
@@ -70,6 +67,7 @@ class Hearts:
             player.cards = []
             player.trick_cards = []
             player.has_passed = False
+            player.conn.send("cards {} {}".format(player.id, " ".join(player.get_card_ids())))
 
     def next_turn(self):
         if not self.cards_played:
@@ -129,6 +127,11 @@ class Hearts:
         if self.player_index < 0:
             self.player_index = len(self.players) - 1
         self.table_cards = {}
+
+    def deal_cards(self):
+        for i in range(13):
+            for player in self.players:
+                player.add(self.deck.pop())
 
     def send_players(self, data):
         for player in self.players:
