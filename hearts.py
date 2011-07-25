@@ -15,9 +15,6 @@ class HeartsPlayer(Hand):
         self.trick_cards = []
         self.points = 0
 
-    def get_card_ids(self):
-        return [str(hash(card)) for card in sorted(self.cards)]
-
     def get_trick_card_ids(self):
         return [str(hash(card)) for card in sorted(self.trick_cards)]
 
@@ -29,8 +26,7 @@ class HeartsPlayer(Hand):
 
 class Hearts:
     def __init__(self):
-        self.deck = Deck()
-        self.deck.shuffle()
+        self.deck = None
         self.players = []
         self.max_players = 4
         self.player_index = 0
@@ -48,6 +44,7 @@ class Hearts:
             player.conn = Client(host, port)
             self.players.append(player)
             if len(self.players) >= self.max_players:
+                self.deal_cards()
                 for i, player in enumerate(self.players):
                     players = self.players[i:len(self.players)] + self.players[0:i]
                     player.conn.send("\n".join(["player {}".format(str(p)) for p in players]))
@@ -98,12 +95,12 @@ class Hearts:
                 other_player.add(card)
         other_player.cards = sorted(other_player.cards)
 
-    def passed_all_cards(self):
-        passed = True
+    def all_cards_passed(self):
+        all_passed = True
         for player in self.players:
             if not player.has_passed:
-                passed = False
-        return passed
+                all_passed = False
+        return all_passed
 
     def take_trick(self):
         player_id = None
@@ -129,6 +126,8 @@ class Hearts:
         self.table_cards = {}
 
     def deal_cards(self):
+        self.deck = Deck()
+        self.deck.shuffle()
         for i in range(13):
             for player in self.players:
                 player.add(self.deck.pop())
@@ -163,7 +162,7 @@ class Hearts:
                         elif line[0] == "pass":
                             player = self.players[self.players.index(player)]
                             self.pass_cards(player, line[2:])
-                            if self.passed_all_cards():
+                            if self.all_cards_passed():
                                 for p in self.players:
                                     p.conn.send("cards {} {}".format(p.id, " ".join(p.get_card_ids())))
                                 self.next_turn()

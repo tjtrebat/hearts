@@ -89,5 +89,8 @@ class Hand(object):
     def remove(self, card):
         self.cards.remove(card)
 
+    def get_card_ids(self):
+        return [str(hash(card)) for card in sorted(self.cards)]
+
     def __str__(self):
         return ','.join([str(card) for card in self.cards])
