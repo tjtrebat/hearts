@@ -108,14 +108,14 @@ class PlayerGUI(threading.Thread):
     def validate_card(self, card):
         is_valid = True
         if not self.turn and Card("2", "Club") != card:
-            tkinter.messagebox.showinfo("Invalid Choice", "You must start with the Two of Clubs.")
+            tkinter.messagebox.showwarning("Invalid Choice", "You must start with the Two of Clubs!")
             is_valid = False
         elif self.suit_played.strip():
             if self.suit_played in [c[0].suit for c in self.players[0].cards] and card.suit != self.suit_played:
-                tkinter.messagebox.showinfo("Play a {}".format(self.suit_played), "You must follow suit.")
+                tkinter.messagebox.showwarning("Play a {}".format(self.suit_played), "You must follow suit!")
                 is_valid = False
         elif card.suit == "Heart" and not self.hearts_broken:
-            tkinter.messagebox.showinfo("Invalid Choice", "Cannot lead with Hearts until it has been broken.")
+            tkinter.messagebox.showwarning("Invalid Choice", "Hearts not broken yet!")
             is_valid = False
         return is_valid
 
@@ -136,6 +136,7 @@ class PlayerGUI(threading.Thread):
         for i, point in enumerate(self.points):
             Label(msg, text=str(point[0])).grid(row=0, column=i)
             Label(msg, text=point[1]).grid(row=1, column=i)
+        msg.show()
 
     def bind_images(self):
         player = self.players[0]
@@ -228,16 +229,14 @@ class PlayerGUI(threading.Thread):
                             self.show_score()
                             self.points = []
                             self.round += 1
-                            if not self.round % 4:
-                                pass
-                            else:
+                            self.turn = 0
+                            if self.round % 4 > 0:
                                 self.max_raised_cards = 3
                                 self.in_turn = True
                                 self.player_btn.config(command=self.pass_cards)
                         if self.id == player_canvas.id:
                             for i in range(13):
                                 player_canvas.cards.append((None, player_canvas.canvas.create_image(20 * i + 5, 70,
-                                                                                                    image=self.face_down_image,
                                                                                                     anchor=W),))
                         #for i, card_id in enumerate(line[2:]):
                         #    if self.id == player_canvas.id:
