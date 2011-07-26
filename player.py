@@ -130,6 +130,13 @@ class PlayerGUI(threading.Thread):
     #        else:
     #            player.canvas.itemconfig(card[1], image=self.face_down_image)
 
+    def show_score(self):
+        self.points = sorted(self.points, key=lambda point: point[1])
+        msg = tkinter.messagebox.Message(self.root)
+        for i, point in enumerate(self.points):
+            Label(msg, text=str(point[0])).grid(row=0, column=i)
+            Label(msg, text=point[1]).grid(row=1, column=i)
+
     def bind_images(self):
         player = self.players[0]
         for card, image in player.cards:
@@ -218,11 +225,7 @@ class PlayerGUI(threading.Thread):
                     elif line[0] == "points":
                         self.points.append((player_canvas, int(line[2])))
                         if len(self.points) >= 4:
-                            self.points = sorted(self.points, key=lambda point: point[1])
-                            top = Toplevel(self.root)
-                            for i, point in enumerate(self.points):
-                                Label(top, text=str(point[0])).grid(row=0, column=i)
-                                Label(top, text=point[1]).grid(row=1, column=i)
+                            self.show_score()
                             self.points = []
                             self.round += 1
                             if not self.round % 4:

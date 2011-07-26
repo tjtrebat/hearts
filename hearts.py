@@ -15,6 +15,10 @@ class HeartsPlayer(Hand):
         self.trick_cards = []
         self.points = 0
 
+    def add_trick_cards(self, cards):
+        for card in cards:
+            self.trick_cards.append(card)
+
     #def get_trick_card_ids(self):
     #    return [str(hash(card)) for card in sorted(self.trick_cards)]
 
@@ -26,7 +30,6 @@ class HeartsPlayer(Hand):
 
 class Hearts:
     def __init__(self):
-        self.deck = None
         self.players = []
         self.max_players = 4
         self.player_index = 0
@@ -34,7 +37,6 @@ class Hearts:
         self.cards_played = 0
         self.suit_played = ''
         self.table_cards = {}
-        #self.winner = None
         self.line_num = 0
         update = multiprocessing.Process(target=self.update_server)
         update.start()
@@ -59,22 +61,33 @@ class Hearts:
         self.cards_played = 0
         for player in self.players:
             points = 0
-            for card in player.cards:
+            for card in player.trick_cards:
                 if card.suit == 'Heart':
                     points += 1
                 elif Card('Queen', 'Spade') == card:
                     points += 13
-            if points == 26:
-                pass
-
+            if points < 26:
+                player.points += points
+            else:
+                for p in self.players:
+                    if p != player:
+                        p.points += points
         self.send_players("\n".join(["points {} {}".format(player.id, player.points) for player in self.players]))
         #self.send_players("round {} {}".format(self.winner.id, " ".join(self.winner.get_trick_card_ids())))
         for player in self.players:
             player.cards = []
             player.trick_cards = []
             player.has_passed = False
-        self.deal_cards()
+        if not self.game_over():
+            self.deal_cards()
 
+    def game_over(self):
+        game_over = False
+        for player in self.players:
+            if player.points >= 100:
+                game_over = True
+        return game_over
+            
     def next_turn(self):
         if not self.cards_played:
             card = Card('2', 'Club')
@@ -113,7 +126,7 @@ class Hearts:
                 all_passed = False
         return all_passed
 
-    def take_trick(self):
+    def get_trick_winner(self):
         player_id = None
         highest_rank = -1
         ranks = [str(i) for i in range(2, 11)] + ['Jack', 'Queen', 'King', 'Ace']
@@ -122,23 +135,17 @@ class Hearts:
             if value.suit == self.suit_played and rank >= highest_rank:
                 player_id = key
                 highest_rank = rank
-        winner = self.get_player(player_id)
-        for card in self.table_cards.values():
-            winner.trick_cards.append(card)
-        self.player_index = self.players.index(winner) - 1
-        if self.player_index < 0:
-            self.player_index = len(self.players) - 1
-        self.table_cards = {}
+        return self.get_player(player_id)
 
     def deal_cards(self):
-        self.deck = Deck()
-        self.deck.shuffle()
+        deck = Deck()
+        deck.shuffle()
         for i in range(13):
             for player in self.players:
-                player.add(self.deck.pop())
+                player.add(deck.pop())
         for player in self.players:
             player.conn.send("cards {} {}".format(player.id, " ".join(player.get_card_ids())))
-                
+
     def send_players(self, data):
         for player in self.players:
             player.conn.send(data)
@@ -179,7 +186,12 @@ class Hearts:
                             self.send_players(" ".join(line))
                             self.cards_played += 1
                             if not self.cards_played % 4:
-                                self.take_trick()
+                                trick_winner = self.get_trick_winner()
+                                trick_winner.add_trick_cards(self.table_cards.values())
+                                self.table_cards = {}
+                                self.player_index = self.players.index(trick_winner) - 1
+                                if self.player_index < 0:
+                                    self.player_index = len(self.players) - 1
                                 if self.cards_played >= 52:
                                     self.next_round()
                             elif self.cards_played % 4 <= 1:
