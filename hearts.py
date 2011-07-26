@@ -15,8 +15,8 @@ class HeartsPlayer(Hand):
         self.trick_cards = []
         self.points = 0
 
-    def get_trick_card_ids(self):
-        return [str(hash(card)) for card in sorted(self.trick_cards)]
+    #def get_trick_card_ids(self):
+    #    return [str(hash(card)) for card in sorted(self.trick_cards)]
 
     def __eq__(self, other):
         return self.id == other.id
@@ -34,7 +34,7 @@ class Hearts:
         self.cards_played = 0
         self.suit_played = ''
         self.table_cards = {}
-        self.winner = None
+        #self.winner = None
         self.line_num = 0
         update = multiprocessing.Process(target=self.update_server)
         update.start()
@@ -44,11 +44,10 @@ class Hearts:
             player.conn = Client(host, port)
             self.players.append(player)
             if len(self.players) >= self.max_players:
-                self.deal_cards()
                 for i, player in enumerate(self.players):
                     players = self.players[i:len(self.players)] + self.players[0:i]
                     player.conn.send("\n".join(["player {}".format(str(p)) for p in players]))
-                    player.conn.send("cards {} {}".format(player.id, " ".join(player.get_card_ids())))
+                self.deal_cards()
 
     def remove_player(self, player):
         self.players.remove(player)
@@ -64,7 +63,7 @@ class Hearts:
             player.cards = []
             player.trick_cards = []
             player.has_passed = False
-            player.conn.send("cards {} {}".format(player.id, " ".join(player.get_card_ids())))
+        self.deal_cards()
 
     def next_turn(self):
         if not self.cards_played:
@@ -89,10 +88,12 @@ class Hearts:
         elif self.round % 4 < 3:
             player_index = (player_index + 2) % len(self.players)
         other_player = self.players[player_index]
-        for card in player.cards:
-            if str(hash(card)) in cards:
-                player.remove(card)
-                other_player.add(card)
+        for card_id in cards:
+            card = Deck().get_card(int(card_id))
+            player.remove(card)
+            print("Removing card from " + str(player))
+            other_player.add(card)
+            print("Adding card to " + str(other_player))
         other_player.cards = sorted(other_player.cards)
 
     def all_cards_passed(self):
@@ -116,11 +117,11 @@ class Hearts:
                 points += 1
             elif value.suit == 'Spade' and value.rank == 'Queen':
                 points += 13
-        self.winner = self.get_player(player_id)
-        self.winner.points += points
+        winner = self.get_player(player_id)
+        winner.points += points
         for card in self.table_cards.values():
-            self.winner.trick_cards.append(card)
-        self.player_index = self.players.index(self.winner) - 1
+            winner.trick_cards.append(card)
+        self.player_index = self.players.index(winner) - 1
         if self.player_index < 0:
             self.player_index = len(self.players) - 1
         self.table_cards = {}
@@ -131,7 +132,9 @@ class Hearts:
         for i in range(13):
             for player in self.players:
                 player.add(self.deck.pop())
-
+        for player in self.players:
+            player.conn.send("cards {} {}".format(player.id, " ".join(player.get_card_ids())))
+                
     def send_players(self, data):
         for player in self.players:
             player.conn.send(data)
@@ -161,7 +164,7 @@ class Hearts:
                             self.add_player(player, line[2], int(line[3]))
                         elif line[0] == "pass":
                             player = self.players[self.players.index(player)]
-                            self.pass_cards(player, line[2:])
+                            self.pass_cards(player, line[2:5])
                             if self.all_cards_passed():
                                 for p in self.players:
                                     p.conn.send("cards {} {}".format(p.id, " ".join(p.get_card_ids())))
