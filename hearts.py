@@ -73,7 +73,6 @@ class Hearts:
                     if p != player:
                         p.points += points
         self.send_players("\n".join(["points {} {}".format(player.id, player.points) for player in self.players]))
-        #self.send_players("round {} {}".format(self.winner.id, " ".join(self.winner.get_trick_card_ids())))
         for player in self.players:
             player.cards = []
             player.trick_cards = []

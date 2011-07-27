@@ -123,13 +123,6 @@ class PlayerGUI(threading.Thread):
         while len(self.table_cards):
             self.canvas.delete(self.table_cards.pop()[1])
 
-    #def reset_cards(self, player):
-    #    for i, card in enumerate(player.cards):
-    #        if i > 12:
-    #            player.canvas.delete(card[1])
-    #        else:
-    #            player.canvas.itemconfig(card[1], image=self.face_down_image)
-
     def show_score(self):
         self.points = sorted(self.points, key=lambda point: point[1])
         msg = tkinter.messagebox.Message(self.root)
@@ -238,12 +231,6 @@ class PlayerGUI(threading.Thread):
                             for i in range(13):
                                 player_canvas.cards.append((None, player_canvas.canvas.create_image(20 * i + 5, 70,
                                                                                                     anchor=W),))
-                        #for i, card_id in enumerate(line[2:]):
-                        #    if self.id == player_canvas.id:
-                        #        player_canvas.cards.append((None, player_canvas.canvas.create_image(20 * i + 5, 70,
-                        #                                                                     anchor=W),))
-                        #    player_canvas.canvas.itemconfig(player_canvas.cards[i][1], image=self.cards[int(card_id)])
-                        #player_canvas.canvas.after(5000, lambda x= player_canvas:self.reset_cards(x))
                     elif line[0] == "quit":
                         player_canvas.canvas.delete(ALL)
                     self.line_num += 1
