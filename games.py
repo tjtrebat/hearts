@@ -33,7 +33,6 @@ class GameList:
     def get_games(self):
         self.client.send("games")
         games = self.client.receive()
-        print(games)
         return games.split()
 
 if __name__ == "__main__":

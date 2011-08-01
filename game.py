@@ -1,9 +1,11 @@
 __author__ = 'Tom'
 
+import sys
 import random
-import socketserver
+import socket
+import asyncore
 import threading
-from server import *
+import multiprocessing
 from hearts import *
 
 class GameThread(threading.Thread):
@@ -17,23 +19,43 @@ class GameThread(threading.Thread):
         server = multiprocessing.Process(target=hearts.run_server)
         server.start()
 
-class MyTCPHandler(socketserver.BaseRequestHandler):
+class GameHandler(asyncore.dispatcher_with_send):
 
     games = []
 
-    def handle(self):
-        data = HeartsHandler.load_data(self.request.recv(1024).strip())
-        print(data)
-        if data[0] == "new":
-            print("adding game")
+    def handle_read(self):
+        try:
+            data = self.recv(1024).decode("UTF-8").strip()
+        except socket.error:
+            sys.exit("Error reading data from client.")
+        if data == "new":
             game = GameThread()
             self.games.append(game)
             game.start()
-        elif data[0] == "games":
-            print(self.games)
-            self.request.send(bytes(" ".join(["{}:{}".format(game.host, game.port) for game in self.games]), "UTF-8"))
+            print("new game")
+        elif data == "games":
+            self.send(bytes("games" + " ".join(["{}:{}".format(game.host, game.port) for game in self.games]), "UTF-8"))
+
+    @classmethod
+    def load_data(cls, line):
+        line = line.decode("UTF-8")
+        return line.split()
+
+class GameServer(asyncore.dispatcher):
+    def __init__(self):
+        asyncore.dispatcher.__init__(self)
+        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.set_reuse_addr()
+        self.bind(("localhost", 9999))
+        self.listen(5)
+        asyncore.loop()
+
+    def handle_accept(self):
+        pair = self.accept()
+        if pair is not None:
+            sock, addr = pair
+            print('Incoming connection from %s' % repr(addr))
+            self.handler = GameHandler(sock)
 
 if __name__ == "__main__":
-    HOST, PORT = "localhost", 9999
-    server = socketserver.TCPServer((HOST, PORT), MyTCPHandler)
-    server.serve_forever()
+    server = GameServer()

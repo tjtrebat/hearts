@@ -20,9 +20,8 @@ class HeartsHandler(asyncore.dispatcher_with_send):
 
     @classmethod
     def load_data(cls, line):
-        line = line.split()
-        line = [w.decode("UTF-8") for w in line]
-        return line
+        line = line.decode("UTF-8")
+        return line.split()
 
 class HeartsServer(asyncore.dispatcher):
     def __init__(self, host, port, file_name):
