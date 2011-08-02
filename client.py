@@ -21,5 +21,12 @@ class Client:
         except socket.error:
             sys.exit("Remote host hung up unexpectedly.")
 
+    def receive(self):
+        try:
+            data = self.conn.recv(1024).decode("UTF-8")
+        except socket.error:
+            sys.exit("Remote host hung up unexpectedly.")
+        return data
+
     def close(self):
         self.conn.close()
