@@ -33,13 +33,13 @@ class PlayerCanvas:
         return self.id
 
 class PlayerGUI(threading.Thread):
-    def __init__(self, root):
+    def __init__(self, root, host, port):
         threading.Thread.__init__(self)
         self.root = root
         self.canvas = Canvas(self.root, width=1000, height=650)
         self.player_frame = Frame(self.root)
         self.player_btn = Button(self.player_frame, text='Pass Left', command=self.pass_cards, state=DISABLED)
-        self.face_down_image = PhotoImage(file="cards/b1fv.gif")
+        self.face_down_image = PhotoImage(file="cards/b1fv.gif", master=self.root)
         self.cards = self.get_cards()
         self.id = str(uuid.uuid4())
         self.players = []
@@ -56,7 +56,7 @@ class PlayerGUI(threading.Thread):
         self.add_widgets()
         self.add_canvas_widgets()
         self.HOST, self.PORT = "localhost", random.randint(1000, 60000)
-        self.conn = Client("localhost", 50007)
+        self.conn = Client(host, port)
         self.conn.send("join {} {} {}".format(self.id, self.HOST, self.PORT))
         self.start()
         self.line_num = 0
@@ -169,7 +169,7 @@ class PlayerGUI(threading.Thread):
         cards = {}
         deck = Deck()
         for card in deck:
-            cards[hash(card)] = PhotoImage(file=card.image)
+            cards[hash(card)] = PhotoImage(file=card.image, master=self.root)
         return cards
 
     def run(self):

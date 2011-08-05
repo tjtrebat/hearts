@@ -17,6 +17,7 @@ class HeartsHandler(asyncore.dispatcher_with_send):
             sys.exit("Error reading data from client.")
         print(data.strip())
         handle.write(data)
+        handle.close()
 
     @classmethod
     def load_data(cls, line):

@@ -47,18 +47,14 @@ class GameHandler(asyncore.dispatcher_with_send):
             data = self.recv(1024).decode("UTF-8").strip()
         except socket.error:
             sys.exit("Error reading data from client.")
+        print(data)
         if data == "new":
             game = GameThread(Hearts("localhost", random.randint(1000, 60000)))
             GameServer.games.append(game)
             game.start()
             self.send(bytes("{} {}".format(*game.game.addr), "UTF-8"))
         elif data == "games":
-            self.send(bytes(" ".join(GameServer.get_games()), "UTF-8"))
-
-    @classmethod
-    def load_data(cls, line):
-        line = line.decode("UTF-8")
-        return line.split()
+            self.send(bytes("games " + " ".join(GameServer.get_games()), "UTF-8"))
 
 if __name__ == "__main__":
     server = GameServer()
