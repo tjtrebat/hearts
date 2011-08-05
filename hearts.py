@@ -29,7 +29,7 @@ class HeartsPlayer(Hand):
         return self.id
 
 class Hearts:
-    def __init__(self):
+    def __init__(self, host, port):
         self.players = []
         self.max_players = 4
         self.player_index = 0
@@ -38,6 +38,7 @@ class Hearts:
         self.suit_played = ''
         self.table_cards = {}
         self.line_num = 0
+        self.addr = (host, port,)
         update = multiprocessing.Process(target=self.update_server)
         update.start()
 
@@ -104,9 +105,7 @@ class Hearts:
         if not self.round:
             player_index = (player_index + 1) % len(self.players)
         elif self.round % 4 < 2:
-            player_index -= 1
-            if player_index < 0:
-                player_index = len(self.players) - 1
+            player_index = (player_index + 3) % 4
         elif self.round % 4 < 3:
             player_index = (player_index + 2) % len(self.players)
         other_player = self.players[player_index]
@@ -157,7 +156,7 @@ class Hearts:
         return player
 
     def run_server(self):
-        server = HeartsServer("localhost", 50007, "hearts.p")
+        server = HeartsServer(self.addr[0], self.addr[1], "hearts.p")
 
     def update_server(self):
         while True:
@@ -203,6 +202,7 @@ class Hearts:
             time.sleep(5)
 
 if __name__ == "__main__":
-    hearts = Hearts()
+    import random
+    hearts = Hearts("localhost", random.randint(1000, 60000))
     server = multiprocessing.Process(target=hearts.run_server)
     server.start()

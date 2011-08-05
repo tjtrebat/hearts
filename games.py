@@ -29,11 +29,13 @@ class GameList:
 
     def new_game(self):
         self.client.send("new")
+        addr = self.client.receive()
+        print(addr)
 
     def get_games(self):
         self.client.send("games")
         games = self.client.receive()
-        return games.split()
+        return games.split()[1:]
 
 if __name__ == "__main__":
     root = Tk()
