@@ -17,7 +17,7 @@ class GameList:
         self.add_menu()
 
     def add_games(self):
-        for game in self.get_games():
+        for game in self.client.receive().split()[1:]:
             self.game_list.insert(END, game)
         Button(self.root, text="Join", command=self.join).pack()
 
@@ -32,20 +32,15 @@ class GameList:
 
     def new_game(self):
         self.client.send("new")
-        self.play_game(*self.client.receive().split())
+        self.play_game(self.client.receive())
 
     def join(self):
-        self.play_game(*self.game_list.get(self.game_list.curselection()[0]).split(":"))
+        self.play_game(self.game_list.get(self.game_list.curselection()[0]))
 
-    def play_game(self, host, port):
+    def play_game(self, port):
         root = Tk()
-        player = PlayerGUI(root, host, int(port))
+        player = PlayerGUI(root, "localhost", int(port))
         root.mainloop()
-        
-    def get_games(self):
-        self.client.send("games")
-        games = self.client.receive()
-        return games.split()[1:]
 
     def quit(self):
         self.client.close()

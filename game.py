@@ -34,12 +34,12 @@ class GameServer(asyncore.dispatcher):
         if pair is not None:
             sock, addr = pair
             print('Incoming connection from %s' % repr(addr))
+            sock.send(bytes("games " + " ".join(self.get_game_ports()), "UTF-8"))
             self.handler = GameHandler(sock)
 
-    @classmethod
-    def get_games(cls):
-        return ["{}:{}".format(*game.game.addr) for game in cls.games]
-
+    def get_game_ports(self):
+        return [str(game.game.addr[1]) for game in self.games]
+        
 class GameHandler(asyncore.dispatcher_with_send):
 
     def handle_read(self):
@@ -52,9 +52,7 @@ class GameHandler(asyncore.dispatcher_with_send):
             game = GameThread(Hearts("localhost", random.randint(1000, 60000)))
             GameServer.games.append(game)
             game.start()
-            self.send(bytes("{} {}".format(*game.game.addr), "UTF-8"))
-        elif data == "games":
-            self.send(bytes("games " + " ".join(GameServer.get_games()), "UTF-8"))
+            self.send(bytes(str(game.game.addr[1]), "UTF-8"))
 
 if __name__ == "__main__":
     server = GameServer()
