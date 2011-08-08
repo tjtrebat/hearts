@@ -243,5 +243,5 @@ class PlayerGUI(threading.Thread):
 
 if __name__ == "__main__":
     root = Tk()
-    gui = PlayerGUI(root)
+    gui = PlayerGUI(root, "localhost", 9999)
     root.mainloop()

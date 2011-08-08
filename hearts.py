@@ -204,7 +204,6 @@ class Hearts:
             time.sleep(5)
 
 if __name__ == "__main__":
-    import random
-    hearts = Hearts("localhost", random.randint(1000, 60000))
+    hearts = Hearts("localhost", 9999)
     server = multiprocessing.Process(target=hearts.run_server)
     server.start()
