@@ -34,11 +34,15 @@ class GameServer(asyncore.dispatcher):
         if pair is not None:
             sock, addr = pair
             print('Incoming connection from %s' % repr(addr))
-            sock.send(bytes("games " + " ".join(self.get_game_ports()), "UTF-8"))
+            sock.send(bytes("games " + " ".join(self.get_open_games()), "UTF-8"))
             self.handler = GameHandler(sock)
 
-    def get_game_ports(self):
-        return [str(game.game.addr[1]) for game in self.games]
+    def get_open_games(self):
+        ports = []
+        for game in self.games:
+            if len(game.game.players) < 4:
+                ports.append(str(game.game.addr[1]))
+        return ports
         
 class GameHandler(asyncore.dispatcher_with_send):
 

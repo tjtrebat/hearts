@@ -31,7 +31,6 @@ class HeartsPlayer(Hand):
 class Hearts:
     def __init__(self, host, port):
         self.players = []
-        self.max_players = 4
         self.player_index = 0
         self.round = 0
         self.cards_played = 0
@@ -46,11 +45,11 @@ class Hearts:
         if player not in self.players:
             player.conn = Client(host, port)
             self.players.append(player)
-            if len(self.players) >= self.max_players:
-                for i, player in enumerate(self.players):
-                    players = self.players[i:len(self.players)] + self.players[0:i]
-                    player.conn.send("\n".join(["player {}".format(str(p)) for p in players]))
-                self.deal_cards()
+
+    def send_player_info(self):
+        for i, player in enumerate(self.players):
+            players = self.players[i:len(self.players)] + self.players[0:i]
+            player.conn.send("\n".join(["player {}".format(str(p)) for p in players]))
 
     def remove_player(self, player):
         self.players.remove(player)
@@ -171,6 +170,9 @@ class Hearts:
                         player = HeartsPlayer(line[1])
                         if line[0] == "join":
                             self.add_player(player, line[2], int(line[3]))
+                            if len(self.players) >= 4:
+                                self.send_player_info()
+                                self.deal_cards()
                         elif line[0] == "pass":
                             player = self.players[self.players.index(player)]
                             self.pass_cards(player, line[2:5])
