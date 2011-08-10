@@ -9,6 +9,7 @@ from cards import *
 class Player(Hand):
     def __init__(self):
         super(Player, self).__init__()
+        self.id = ""
         self.client = None
         self.has_passed = False
         self.trick_cards = []
@@ -21,12 +22,13 @@ class Hearts:
         self.players = [Player() for i in range(4)]
         self.deal()
 
-    def add_player(self, host, port):
-        if self.players_added < 4:
-            player = self.players[self.players_added]
-            player.client = Client(host, port)
-            player.client.send("cards {}".format(" ".join(player.get_card_ids())))
-            self.players_added += 1
+    def add_player(self, id, host, port):
+        player = self.players[self.players_added]
+        player.id = id
+        player.client = Client(host, port)
+        player.client.send("cards {}".format(" ".join(player.get_card_ids())))
+        self.players.append(player)
+        self.players_added += 1
 
     def deal(self):
         self.deck.shuffle()
@@ -35,6 +37,9 @@ class Hearts:
                 player.add(self.deck.pop())
 
 class HeartsHandler(asyncore.dispatcher_with_send):
+    def __init__(self, hearts, *args):
+        self.hearts = hearts
+        super(HeartsHandler, self).__init__(*args)
 
     def handle_read(self):
         try:
@@ -45,7 +50,11 @@ class HeartsHandler(asyncore.dispatcher_with_send):
         if data:
             data = data.split()
             if data[0] == "join":
-                HeartsServer.hearts.add_player(data[1], int(data[2]))
+                if self.hearts.players_added < 4:
+                    self.hearts.add_player(data[1], data[2], int(data[3]))
+            elif data[0] == "pass":
+                pass
+
 
 class HeartsServer(asyncore.dispatcher):
 
@@ -64,7 +73,7 @@ class HeartsServer(asyncore.dispatcher):
         if pair is not None:
             sock, addr = pair
             print('Incoming connection from %s' % repr(addr))
-            self.handler = HeartsHandler(sock)
+            self.handler = HeartsHandler(self.hearts, sock)
 
 if __name__ == "__main__":
     server = HeartsServer("localhost", 9999)

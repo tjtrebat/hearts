@@ -2,6 +2,7 @@ __author__ = 'Tom'
 
 import sys
 import random
+import uuid
 import socket
 import asyncore
 import threading
@@ -27,15 +28,19 @@ class PlayerCanvas:
 class Player(threading.Thread):
     def __init__(self, root):
         threading.Thread.__init__(self)
+        self.id = uuid.uuid4()
         self.client = Client("localhost", 9999)
         self.server_addr = ("localhost", random.randint(1000, 60000),)
         self.player_canvases = []
         self.root = root
         self.canvas = Canvas(self.root, width=1000, height=650)
         self.player_frame = Frame(self.root)
-        #self.player_btn = Button(self.player_frame, text='Pass Left', command=self.pass_cards, state=DISABLED)
-        self.cards = self.get_cards()
+        self.player_btn = Button(self.player_frame, text='Pass Left', command=self.pass_cards, state=DISABLED)
         self.face_down_image = PhotoImage(file="cards/b1fv.gif", master=self.root)
+        self.max_raised_cards = 3
+        self.raised_cards = []
+        self.in_turn = True
+        self.cards = self.get_cards()
         self.add_widgets()
         self.add_canvas_widgets()
         self.join_game()
@@ -48,7 +53,7 @@ class Player(threading.Thread):
         #self.root.protocol("WM_DELETE_WINDOW", self.quit)
         self.canvas.pack(fill='both', expand='yes')
         self.player_frame.pack()
-        #self.player_btn.pack()
+        self.player_btn.pack()
 
     def add_canvas_widgets(self):
         for position in range(4):
@@ -61,7 +66,41 @@ class Player(threading.Thread):
             self.player_canvases.append(player_canvas)
 
     def join_game(self):
-        self.client.send("join {} {}".format(*self.server_addr))
+        self.client.send("join {} {} {}".format(self.id, *self.server_addr))
+
+    def pass_cards(self):
+        self.unbind_images()
+        self.player_btn.config(text='Play', state=DISABLED)
+        self.client.send("pass {} {}".format(self.id, " ".join([str(hash(card[0])) for card in self.raised_cards])))
+        self.max_raised_cards = 1
+        self.in_turn = False
+
+    def bind_images(self):
+        player = self.player_canvases[0]
+        for card, image in player.cards:
+            player.canvas.tag_bind(image, "<Button-1>",
+                                   lambda x, y=(card, image,):self.lift_card(x, *y))
+
+    def unbind_images(self):
+        player = self.player_canvases[0]
+        for card in player.cards:
+            player.canvas.tag_unbind(card[1], "<Button-1>")
+
+    def lift_card(self, event, card, image):
+        card = (card, image,)
+        if len(self.raised_cards) < self.max_raised_cards:
+            event.widget.move(image, 0, -20)
+            event.widget.tag_bind(image, "<Button-1>", lambda x, y=card:self.lower_card(x, *y))
+            self.raised_cards.append(card)
+            if len(self.raised_cards) >= self.max_raised_cards and self.in_turn:
+                self.player_btn.config(state=ACTIVE)
+
+    def lower_card(self, event, card, image):
+        card = (card, image,)
+        event.widget.move(image, 0, 20)
+        event.widget.tag_bind(image, "<Button-1>", lambda x, y=card:self.lift_card(x, *y))
+        self.raised_cards.remove(card)
+        self.player_btn.config(state=DISABLED)
 
     def run(self):
         server = PlayerServer(self, *self.server_addr)
@@ -74,7 +113,6 @@ class Player(threading.Thread):
         return cards
 
 class PlayerHandler(asyncore.dispatcher_with_send):
-
     def __init__(self, player, *args):
         self.player = player
         super(PlayerHandler, self).__init__(*args)
@@ -94,9 +132,9 @@ class PlayerHandler(asyncore.dispatcher_with_send):
                 player_card = (card, player_card[1],)
                 player_canvas.cards[i] = player_card
                 player_canvas.canvas.itemconfig(player_canvas.cards[i][1], image=self.player.cards[hash(card)])
+            self.player.bind_images()
 
 class PlayerServer(asyncore.dispatcher):
-
     def __init__(self, player, host, port):
         self.player = player
         asyncore.dispatcher.__init__(self)
