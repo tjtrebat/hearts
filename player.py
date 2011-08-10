@@ -1,5 +1,124 @@
 __author__ = 'Tom'
 
+import sys
+import random
+import socket
+import asyncore
+import threading
+from tkinter import *
+from tkinter.ttk import *
+from client import *
+from cards import *
+
+class PlayerCanvas:
+    def __init__(self, root, position):
+        self.canvas = Canvas(root, width=325, height=135)
+        self.position = position
+        self.cards = []
+
+    def get_position(self):
+        positions = ((500, 600), (160, 330), (500, 60), (850, 330),)
+        return positions[self.position]
+
+    def get_card_position(self):
+        positions = ((500, 350), (450, 325), (500, 300), (550, 325),)
+        return positions[self.position]
+
+class Player(threading.Thread):
+    def __init__(self, root):
+        threading.Thread.__init__(self)
+        self.client = Client("localhost", 9999)
+        self.server_addr = ("localhost", random.randint(1000, 60000),)
+        self.player_canvases = []
+        self.root = root
+        self.canvas = Canvas(self.root, width=1000, height=650)
+        self.player_frame = Frame(self.root)
+        #self.player_btn = Button(self.player_frame, text='Pass Left', command=self.pass_cards, state=DISABLED)
+        self.cards = self.get_cards()
+        self.face_down_image = PhotoImage(file="cards/b1fv.gif", master=self.root)
+        self.add_widgets()
+        self.add_canvas_widgets()
+        self.join_game()
+        self.start()
+
+    def add_widgets(self):
+        self.root.title("Hearts")
+        self.root.geometry("1000x700")
+        self.root.resizable(0, 0)
+        #self.root.protocol("WM_DELETE_WINDOW", self.quit)
+        self.canvas.pack(fill='both', expand='yes')
+        self.player_frame.pack()
+        #self.player_btn.pack()
+
+    def add_canvas_widgets(self):
+        for position in range(4):
+            player_canvas = PlayerCanvas(self.root, position)
+            for i in range(13):
+                player_canvas.cards.append((None, player_canvas.canvas.create_image(20 * i + 5, 70,
+                                                                             image=self.face_down_image,
+                                                                             anchor=W),))
+            self.canvas.create_window(player_canvas.get_position(), window=player_canvas.canvas)
+            self.player_canvases.append(player_canvas)
+
+    def join_game(self):
+        self.client.send("join {} {}".format(*self.server_addr))
+
+    def run(self):
+        server = PlayerServer(self, *self.server_addr)
+
+    def get_cards(self):
+        cards = {}
+        deck = Deck()
+        for card in deck:
+            cards[hash(card)] = PhotoImage(file=card.image, master=self.root)
+        return cards
+
+class PlayerHandler(asyncore.dispatcher_with_send):
+
+    def __init__(self, player, *args):
+        self.player = player
+        super(PlayerHandler, self).__init__(*args)
+
+    def handle_read(self):
+        try:
+            data = self.recv(1024).decode("UTF-8").strip()
+        except socket.error:
+            sys.exit("Error reading data from client.")
+        print(data)
+        data = data.split()
+        if data[0] == "cards":
+            player_canvas = self.player.player_canvases[0]
+            for i, card in enumerate(data[1:15]):
+                card = Deck().get_card(int(card))
+                player_card = player_canvas.cards[i]
+                player_card = (card, player_card[1],)
+                player_canvas.cards[i] = player_card
+                player_canvas.canvas.itemconfig(player_canvas.cards[i][1], image=self.player.cards[hash(card)])
+
+class PlayerServer(asyncore.dispatcher):
+
+    def __init__(self, player, host, port):
+        self.player = player
+        asyncore.dispatcher.__init__(self)
+        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.set_reuse_addr()
+        self.bind((host, port))
+        self.listen(5)
+        asyncore.loop()
+
+    def handle_accept(self):
+        pair = self.accept()
+        if pair is not None:
+            sock, addr = pair
+            print('Incoming connection from %s' % repr(addr))
+            self.handler = PlayerHandler(self.player, sock)
+
+if __name__ == "__main__":
+    root = Tk()
+    player = Player(root)
+    root.mainloop()
+
+"""
 import uuid
 import random
 import threading
@@ -245,3 +364,4 @@ if __name__ == "__main__":
     root = Tk()
     gui = PlayerGUI(root, "localhost", 9999)
     root.mainloop()
+"""

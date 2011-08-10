@@ -1,5 +1,75 @@
 __author__ = 'Tom'
 
+import sys
+import socket
+import asyncore
+from client import *
+from cards import *
+
+class Player(Hand):
+    def __init__(self):
+        super(Player, self).__init__()
+        self.client = None
+        self.has_passed = False
+        self.trick_cards = []
+        self.points = 0
+
+class Hearts:
+    def __init__(self):
+        self.deck = Deck()
+        self.players_added = 0
+        self.players = [Player() for i in range(4)]
+        self.deal()
+
+    def add_player(self, host, port):
+        if self.players_added < 4:
+            player = self.players[self.players_added]
+            player.client = Client(host, port)
+            player.client.send("cards {}".format(" ".join(player.get_card_ids())))
+            self.players_added += 1
+
+    def deal(self):
+        self.deck.shuffle()
+        for i in range(13):
+            for player in self.players:
+                player.add(self.deck.pop())
+
+class HeartsHandler(asyncore.dispatcher_with_send):
+
+    def handle_read(self):
+        try:
+            data = self.recv(1024).decode("UTF-8").strip()
+        except socket.error:
+            sys.exit("Error reading data from client.")
+        print(data)
+        if data:
+            data = data.split()
+            if data[0] == "join":
+                HeartsServer.hearts.add_player(data[1], int(data[2]))
+
+class HeartsServer(asyncore.dispatcher):
+
+    hearts = Hearts()
+
+    def __init__(self, host, port):
+        asyncore.dispatcher.__init__(self)
+        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.set_reuse_addr()
+        self.bind((host, port))
+        self.listen(5)
+        asyncore.loop()
+
+    def handle_accept(self):
+        pair = self.accept()
+        if pair is not None:
+            sock, addr = pair
+            print('Incoming connection from %s' % repr(addr))
+            self.handler = HeartsHandler(sock)
+
+if __name__ == "__main__":
+    server = HeartsServer("localhost", 9999)
+
+"""
 import time
 import multiprocessing
 from client import *
@@ -207,3 +277,4 @@ if __name__ == "__main__":
     hearts = Hearts("localhost", 9999)
     server = multiprocessing.Process(target=hearts.run_server)
     server.start()
+"""
