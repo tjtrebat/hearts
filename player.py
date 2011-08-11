@@ -6,6 +6,7 @@ import random
 import socket
 import asyncore
 import threading
+import tkinter.messagebox
 from tkinter import *
 from tkinter.ttk import *
 from client import *
@@ -33,6 +34,10 @@ class Player(threading.Thread):
         self.raised_cards = []
         self.in_turn = True
         self.player_canvases = []
+        self.player_canvas = None
+        self.suit_played = ''
+        self.hearts_broken = False
+        self.turn = 0
         self.root = root
         self.canvas = Canvas(self.root, width=1000, height=650)
         self.player_frame = Frame(self.root)
@@ -64,6 +69,7 @@ class Player(threading.Thread):
                                                                              anchor=W),))
             self.canvas.create_window(player_canvas.get_position(), window=player_canvas.canvas)
             self.player_canvases.append(player_canvas)
+        self.player_canvas = self.player_canvases[0]
 
     def get_card_images(self):
         card_images = {}
@@ -76,35 +82,67 @@ class Player(threading.Thread):
         self.client.send("join {} {} {}".format(self.id, *self.server_addr))
 
     def add_hand(self, cards):
-        player_canvas = self.player_canvases[0]
-        # lower raised cards first
+        # lower raised cards
         while len(self.raised_cards):
-            player_canvas.canvas.move(self.raised_cards.pop()[1], 0, 20)
+            self.player_canvas.canvas.move(self.raised_cards.pop()[1], 0, 20)
         # iterate over card ids and apply appropriate image
         for i, card in enumerate(cards):
             card = Deck().get_card(int(card))
-            player_card = player_canvas.cards[i]
+            player_card = self.player_canvas.cards[i]
             player_card = (card, player_card[1],)
-            player_canvas.cards[i] = player_card
-            player_canvas.canvas.itemconfig(player_card[1], image=self.card_images[hash(card)])
+            self.player_canvas.cards[i] = player_card
+            self.player_canvas.canvas.itemconfig(player_card[1], image=self.card_images[hash(card)])
 
     def pass_cards(self):
-        self.unbind_images()
-        self.player_btn.config(text='Play', state=DISABLED)
         self.client.send("pass {} {}".format(self.id, " ".join([str(hash(card[0])) for card in self.raised_cards])))
+        self.player_btn.config(text='Play', state=DISABLED)
         self.max_raised_cards = 1
         self.in_turn = False
+        self.unbind_images()
+
+    def take_turn(self):
+        self.player_btn.config(command=self.play_card)
+        self.in_turn = True
+        self.bind_images()
+
+    def play_card(self):
+        raised_card = self.raised_cards.pop()
+        card, image = raised_card
+        if self.validate_card(card):
+            self.player_canvas.canvas.delete(image)
+            self.player_canvas.cards.remove(raised_card)
+            self.client.send("play {} {}".format(self.id, str(hash(card))))
+            self.player_btn.config(state=DISABLED)
+            self.in_turn = False
+            self.unbind_images()
+        else:
+            self.player_canvas.canvas.move(image, 0, 20)
+            self.player_canvas.canvas.tag_bind(image, "<Button-1>",
+                                               lambda x, y=raised_card:self.lift_card(x, *y))
+            self.player_btn.config(state=DISABLED)
+
+    def validate_card(self, card):
+        is_valid = True
+        if not self.turn and Card("2", "Club") != card:
+            tkinter.messagebox.showwarning("Invalid Choice", "You must start with the Two of Clubs!")
+            is_valid = False
+        elif self.suit_played.strip():
+            if self.suit_played in [c[0].suit for c in self.player_canvas.cards] and card.suit != self.suit_played:
+                tkinter.messagebox.showwarning("Play a {}".format(self.suit_played), "You must follow suit!")
+                is_valid = False
+        elif card.suit == "Heart" and not self.hearts_broken:
+            tkinter.messagebox.showwarning("Invalid Choice", "Hearts not broken yet!")
+            is_valid = False
+        return is_valid
 
     def bind_images(self):
-        player = self.player_canvases[0]
-        for card, image in player.cards:
-            player.canvas.tag_bind(image, "<Button-1>",
+        for card, image in self.player_canvas.cards:
+            self.player_canvas.canvas.tag_bind(image, "<Button-1>",
                                    lambda x, y=(card, image,):self.lift_card(x, *y))
 
     def unbind_images(self):
-        player = self.player_canvases[0]
-        for card in player.cards:
-            player.canvas.tag_unbind(card[1], "<Button-1>")
+        for card in self.player_canvas.cards:
+            self.player_canvas.canvas.tag_unbind(card[1], "<Button-1>")
 
     def lift_card(self, event, card, image):
         card = (card, image,)
@@ -140,6 +178,8 @@ class PlayerHandler(asyncore.dispatcher_with_send):
         if data[0] == "cards":
             self.player.add_hand(data[1:14])
             self.player.bind_images()
+        elif data[0] == "turn":
+            self.player.take_turn()
 
 class PlayerServer(asyncore.dispatcher):
     def __init__(self, player, host, port):

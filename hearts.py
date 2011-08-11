@@ -20,6 +20,8 @@ class Hearts:
         self.deck = Deck()
         self.players = []
         self.round = 0
+        self.cards_played = 0
+        self.player_index = 0
 
     def add_player(self, player_id, host, port):
         player = Player(player_id)
@@ -68,6 +70,16 @@ class Hearts:
                 passed = False
         return passed
 
+    def next_turn(self):
+        if not self.cards_played:
+            card = Card('2', 'Club')
+            for i, player in enumerate(self.players):
+                if card in player.cards:
+                    self.player_index = i
+        else:
+            self.player_index = (self.player_index + 1) % len(self.players)
+        self.players[self.player_index].client.send("turn")
+
 class HeartsHandler(asyncore.dispatcher_with_send):
     def __init__(self, hearts, *args):
         self.hearts = hearts
@@ -90,6 +102,7 @@ class HeartsHandler(asyncore.dispatcher_with_send):
                 self.hearts.pass_cards(data[1], data[2:5])
                 if self.hearts.passed_all_cards():
                     self.hearts.send_player_cards()
+                    self.hearts.next_turn()
 
 class HeartsServer(asyncore.dispatcher):
 
