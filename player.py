@@ -77,12 +77,16 @@ class Player(threading.Thread):
 
     def add_hand(self, cards):
         player_canvas = self.player_canvases[0]
+        # lower raised cards first
+        while len(self.raised_cards):
+            player_canvas.canvas.move(self.raised_cards.pop()[1], 0, 20)
+        # iterate over card ids and apply appropriate image
         for i, card in enumerate(cards):
             card = Deck().get_card(int(card))
             player_card = player_canvas.cards[i]
             player_card = (card, player_card[1],)
             player_canvas.cards[i] = player_card
-            player_canvas.canvas.itemconfig(player_canvas.cards[i][1], image=self.card_images[hash(card)])
+            player_canvas.canvas.itemconfig(player_card[1], image=self.card_images[hash(card)])
 
     def pass_cards(self):
         self.unbind_images()
@@ -134,7 +138,7 @@ class PlayerHandler(asyncore.dispatcher_with_send):
         print(data)
         data = data.split()
         if data[0] == "cards":
-            self.player.add_hand(data[1:15])
+            self.player.add_hand(data[1:14])
             self.player.bind_images()
 
 class PlayerServer(asyncore.dispatcher):

@@ -19,19 +19,54 @@ class Hearts:
     def __init__(self):
         self.deck = Deck()
         self.players = []
+        self.round = 0
 
-    def add_player(self, id, host, port):
-        player = Player(id)
+    def add_player(self, player_id, host, port):
+        player = Player(player_id)
         player.client = Client(host, port)
         self.players.append(player)
+
+    def get_player(self, player_id):
+        player = None
+        for p in self.players:
+            if p.id == player_id:
+                player = p
+        return player
 
     def deal(self):
         self.deck.shuffle()
         for i in range(13):
             for player in self.players:
                 player.add(self.deck.pop())
+        self.send_player_cards()
+
+    def send_player_cards(self):
         for player in self.players:
             player.client.send("cards {}".format(" ".join(player.get_card_ids())))
+
+    def pass_cards(self, player_id, cards):
+        player = self.get_player(player_id)
+        player.has_passed = True
+        player_index = self.players.index(player)
+        if not self.round:
+            player_index = (player_index + 1) % len(self.players)
+        elif self.round % 4 < 2:
+            player_index = (player_index + 3) % 4
+        elif self.round % 4 < 3:
+            player_index = (player_index + 2) % len(self.players)
+        other_player = self.players[player_index]
+        for card_id in cards:
+            card = Deck().get_card(int(card_id))
+            player.remove(card)
+            other_player.add(card)
+        other_player.cards = sorted(other_player.cards)
+
+    def passed_all_cards(self):
+        passed = True
+        for player in self.players:
+            if not player.has_passed:
+                passed = False
+        return passed
 
 class HeartsHandler(asyncore.dispatcher_with_send):
     def __init__(self, hearts, *args):
@@ -52,7 +87,9 @@ class HeartsHandler(asyncore.dispatcher_with_send):
                     if len(self.hearts.players) >= 4:
                         self.hearts.deal()
             elif data[0] == "pass":
-                pass
+                self.hearts.pass_cards(data[1], data[2:5])
+                if self.hearts.passed_all_cards():
+                    self.hearts.send_player_cards()
 
 class HeartsServer(asyncore.dispatcher):
 
