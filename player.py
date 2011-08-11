@@ -1,8 +1,8 @@
 __author__ = 'Tom'
 
 import sys
-import random
 import uuid
+import random
 import socket
 import asyncore
 import threading
@@ -29,20 +29,20 @@ class Player(threading.Thread):
     def __init__(self, root):
         threading.Thread.__init__(self)
         self.id = uuid.uuid4()
-        self.client = Client("localhost", 9999)
-        self.server_addr = ("localhost", random.randint(1000, 60000),)
+        self.max_raised_cards = 3
+        self.raised_cards = []
+        self.in_turn = True
         self.player_canvases = []
         self.root = root
         self.canvas = Canvas(self.root, width=1000, height=650)
         self.player_frame = Frame(self.root)
         self.player_btn = Button(self.player_frame, text='Pass Left', command=self.pass_cards, state=DISABLED)
         self.face_down_image = PhotoImage(file="cards/b1fv.gif", master=self.root)
-        self.max_raised_cards = 3
-        self.raised_cards = []
-        self.in_turn = True
-        self.cards = self.get_cards()
+        self.card_images = self.get_card_images()
         self.add_widgets()
         self.add_canvas_widgets()
+        self.client = Client("localhost", 9999)
+        self.server_addr = ("localhost", random.randint(1000, 60000),)
         self.join_game()
         self.start()
 
@@ -65,8 +65,24 @@ class Player(threading.Thread):
             self.canvas.create_window(player_canvas.get_position(), window=player_canvas.canvas)
             self.player_canvases.append(player_canvas)
 
+    def get_card_images(self):
+        card_images = {}
+        deck = Deck()
+        for card in deck:
+            card_images[hash(card)] = PhotoImage(file=card.image, master=self.root)
+        return card_images
+
     def join_game(self):
         self.client.send("join {} {} {}".format(self.id, *self.server_addr))
+
+    def add_hand(self, cards):
+        player_canvas = self.player_canvases[0]
+        for i, card in enumerate(cards):
+            card = Deck().get_card(int(card))
+            player_card = player_canvas.cards[i]
+            player_card = (card, player_card[1],)
+            player_canvas.cards[i] = player_card
+            player_canvas.canvas.itemconfig(player_canvas.cards[i][1], image=self.card_images[hash(card)])
 
     def pass_cards(self):
         self.unbind_images()
@@ -105,13 +121,6 @@ class Player(threading.Thread):
     def run(self):
         server = PlayerServer(self, *self.server_addr)
 
-    def get_cards(self):
-        cards = {}
-        deck = Deck()
-        for card in deck:
-            cards[hash(card)] = PhotoImage(file=card.image, master=self.root)
-        return cards
-
 class PlayerHandler(asyncore.dispatcher_with_send):
     def __init__(self, player, *args):
         self.player = player
@@ -125,13 +134,7 @@ class PlayerHandler(asyncore.dispatcher_with_send):
         print(data)
         data = data.split()
         if data[0] == "cards":
-            player_canvas = self.player.player_canvases[0]
-            for i, card in enumerate(data[1:15]):
-                card = Deck().get_card(int(card))
-                player_card = player_canvas.cards[i]
-                player_card = (card, player_card[1],)
-                player_canvas.cards[i] = player_card
-                player_canvas.canvas.itemconfig(player_canvas.cards[i][1], image=self.player.cards[hash(card)])
+            self.player.add_hand(data[1:15])
             self.player.bind_images()
 
 class PlayerServer(asyncore.dispatcher):

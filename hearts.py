@@ -7,9 +7,9 @@ from client import *
 from cards import *
 
 class Player(Hand):
-    def __init__(self):
+    def __init__(self, id):
         super(Player, self).__init__()
-        self.id = ""
+        self.id = id
         self.client = None
         self.has_passed = False
         self.trick_cards = []
@@ -18,23 +18,20 @@ class Player(Hand):
 class Hearts:
     def __init__(self):
         self.deck = Deck()
-        self.players_added = 0
-        self.players = [Player() for i in range(4)]
-        self.deal()
+        self.players = []
 
     def add_player(self, id, host, port):
-        player = self.players[self.players_added]
-        player.id = id
+        player = Player(id)
         player.client = Client(host, port)
-        player.client.send("cards {}".format(" ".join(player.get_card_ids())))
         self.players.append(player)
-        self.players_added += 1
 
     def deal(self):
         self.deck.shuffle()
         for i in range(13):
             for player in self.players:
                 player.add(self.deck.pop())
+        for player in self.players:
+            player.client.send("cards {}".format(" ".join(player.get_card_ids())))
 
 class HeartsHandler(asyncore.dispatcher_with_send):
     def __init__(self, hearts, *args):
@@ -50,11 +47,12 @@ class HeartsHandler(asyncore.dispatcher_with_send):
         if data:
             data = data.split()
             if data[0] == "join":
-                if self.hearts.players_added < 4:
+                if len(self.hearts.players) < 4:
                     self.hearts.add_player(data[1], data[2], int(data[3]))
+                    if len(self.hearts.players) >= 4:
+                        self.hearts.deal()
             elif data[0] == "pass":
                 pass
-
 
 class HeartsServer(asyncore.dispatcher):
 
