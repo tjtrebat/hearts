@@ -13,6 +13,7 @@ class Player(Hand):
         self.client = None
         self.has_passed = False
         self.trick_cards = []
+        self.table_card = None
         self.points = 0
 
 class Hearts:
@@ -103,6 +104,26 @@ class HeartsHandler(asyncore.dispatcher_with_send):
                 if self.hearts.passed_all_cards():
                     self.hearts.send_player_cards()
                     self.hearts.next_turn()
+            elif data[0] == "play":
+                card = Deck().get_card(int(data[2]))
+                
+
+
+                self.table_cards[line[1]] = card
+                self.send_players(" ".join(line))
+                self.cards_played += 1
+                if not self.cards_played % 4:
+                    trick_winner = self.get_trick_winner()
+                    trick_winner.add_trick_cards(self.table_cards.values())
+                    self.table_cards = {}
+                    self.player_index = self.players.index(trick_winner) - 1
+                    if self.player_index < 0:
+                        self.player_index = len(self.players) - 1
+                    if self.cards_played >= 52:
+                        self.next_round()
+                elif self.cards_played % 4 <= 1:
+                    self.suit_played = card.suit
+                self.next_turn()
 
 class HeartsServer(asyncore.dispatcher):
 
