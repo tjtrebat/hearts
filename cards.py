@@ -15,6 +15,9 @@ class Card:
             rank = self.rank[0].lower()
         return 'cards/{}.gif'.format(self.suit[0].lower() + str(rank))
 
+    def get_card_id(self):
+        return str(hash(self))
+
     def __hash__(self):
         return hash(self.rank) ^ hash(self.suit)
 
@@ -90,7 +93,7 @@ class Hand(object):
         self.cards.remove(card)
 
     def get_card_ids(self):
-        return [str(hash(card)) for card in sorted(self.cards)]
+        return [card.get_card_id() for card in sorted(self.cards)]
 
     def __str__(self):
         return ','.join([str(card) for card in self.cards])

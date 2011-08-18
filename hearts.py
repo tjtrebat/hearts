@@ -29,13 +29,6 @@ class Hearts:
         player.client = Client(host, port)
         self.players.append(player)
 
-    def get_player(self, player_id):
-        player = None
-        for p in self.players:
-            if p.id == player_id:
-                player = p
-        return player
-
     def deal(self):
         self.deck.shuffle()
         for i in range(13):
@@ -77,9 +70,68 @@ class Hearts:
             for i, player in enumerate(self.players):
                 if card in player.cards:
                     self.player_index = i
+        elif not self.cards_played % 4:
+            trick_winner = self.get_trick_winner()
+            for player in self.players:
+                trick_winner.trick_cards.append(player.table_card)
+            self.player_index = self.players.index(trick_winner)
+            if self.cards_played >= 52:
+                self.next_round()
         else:
             self.player_index = (self.player_index + 1) % len(self.players)
         self.players[self.player_index].client.send("turn")
+
+    def play_card(self, card):
+        self.players[self.player_index].table_card = card
+        for i, player in enumerate(self.players):
+            player.client.send("play {} {}".format((4 + self.player_index - i) % 4, card.get_card_id()))
+        self.cards_played += 1
+        self.next_turn()
+
+    def next_round(self):
+        self.round += 1
+        self.cards_played = 0
+        for player in self.players:
+            points = 0
+            for card in player.trick_cards:
+                if card.suit == 'Heart':
+                    points += 1
+                elif Card('Queen', 'Spade') == card:
+                    points += 13
+            if points < 26:
+                player.points += points
+            else:
+                for p in self.players:
+                    if p != player:
+                        p.points += points
+
+
+        self.send_players("\n".join(["points {} {}".format(player.id, player.points) for player in self.players]))
+        for player in self.players:
+            player.cards = []
+            player.trick_cards = []
+            player.has_passed = False
+        if not self.game_over():
+            self.deal_cards()
+
+    def get_trick_winner(self):
+        trick_winner = None
+        highest_rank = -1
+        ranks = [str(i) for i in range(2, 11)] + ['Jack', 'Queen', 'King', 'Ace']
+        for player in self.players:
+            card = player.table_card
+            rank = ranks.index(card.rank)
+            if card.suit == self.players[(self.player_index + 1) % 4].table_card.suit and rank >= highest_rank:
+                trick_winner = player
+                highest_rank = rank
+        return trick_winner
+
+    def get_player(self, player_id):
+        player = None
+        for p in self.players:
+            if p.id == player_id:
+                player = p
+        return player
 
 class HeartsHandler(asyncore.dispatcher_with_send):
     def __init__(self, hearts, *args):
@@ -105,31 +157,11 @@ class HeartsHandler(asyncore.dispatcher_with_send):
                     self.hearts.send_player_cards()
                     self.hearts.next_turn()
             elif data[0] == "play":
-                card = Deck().get_card(int(data[2]))
-                
-
-
-                self.table_cards[line[1]] = card
-                self.send_players(" ".join(line))
-                self.cards_played += 1
-                if not self.cards_played % 4:
-                    trick_winner = self.get_trick_winner()
-                    trick_winner.add_trick_cards(self.table_cards.values())
-                    self.table_cards = {}
-                    self.player_index = self.players.index(trick_winner) - 1
-                    if self.player_index < 0:
-                        self.player_index = len(self.players) - 1
-                    if self.cards_played >= 52:
-                        self.next_round()
-                elif self.cards_played % 4 <= 1:
-                    self.suit_played = card.suit
-                self.next_turn()
+                self.hearts.play_card(Deck().get_card(int(data[1])))
 
 class HeartsServer(asyncore.dispatcher):
-
-    hearts = Hearts()
-
     def __init__(self, host, port):
+        self.hearts = Hearts()
         asyncore.dispatcher.__init__(self)
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
         self.set_reuse_addr()

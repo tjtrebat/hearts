@@ -32,6 +32,7 @@ class Player(threading.Thread):
         self.id = uuid.uuid4()
         self.max_raised_cards = 3
         self.raised_cards = []
+        self.table_cards = []
         self.in_turn = True
         self.player_canvases = []
         self.player_canvas = None
@@ -71,13 +72,6 @@ class Player(threading.Thread):
             self.player_canvases.append(player_canvas)
         self.player_canvas = self.player_canvases[0]
 
-    def get_card_images(self):
-        card_images = {}
-        deck = Deck()
-        for card in deck:
-            card_images[hash(card)] = PhotoImage(file=card.image, master=self.root)
-        return card_images
-
     def join_game(self):
         self.client.send("join {} {} {}".format(self.id, *self.server_addr))
 
@@ -111,7 +105,7 @@ class Player(threading.Thread):
         if self.validate_card(card):
             self.player_canvas.canvas.delete(image)
             self.player_canvas.cards.remove(raised_card)
-            self.client.send("play {} {}".format(self.id, str(hash(card))))
+            self.client.send("play {}".format(str(hash(card))))
             self.player_btn.config(state=DISABLED)
             self.in_turn = False
             self.unbind_images()
@@ -160,9 +154,32 @@ class Player(threading.Thread):
         self.raised_cards.remove(card)
         self.player_btn.config(state=DISABLED)
 
+    def add_table_card(self, player_index, card):
+        self.turn += 1
+        if not self.turn % 4:
+            self.canvas.after(2000, self.remove_table_cards)
+            self.suit_played = ''
+        elif self.turn % 4 <= 1:
+            self.suit_played = card.suit
+        if card.suit == "Heart":
+            self.hearts_broken = True
+        self.table_cards.append((card, self.canvas.create_image(self.player_canvases[player_index].canvas.get_card_position(),
+                                                                image=self.card_images[hash(card)]),))
+
+    def remove_table_cards(self):
+        while len(self.table_cards):
+            self.canvas.delete(self.table_cards.pop()[1])
+
     def run(self):
         server = PlayerServer(self, *self.server_addr)
 
+    def get_card_images(self):
+        card_images = {}
+        deck = Deck()
+        for card in deck:
+            card_images[hash(card)] = PhotoImage(file=card.image, master=self.root)
+        return card_images
+        
 class PlayerHandler(asyncore.dispatcher_with_send):
     def __init__(self, player, *args):
         self.player = player
@@ -180,6 +197,8 @@ class PlayerHandler(asyncore.dispatcher_with_send):
             self.player.bind_images()
         elif data[0] == "turn":
             self.player.take_turn()
+        elif data[0] == "play":
+            self.player.add_table_card(int(data[1]), Deck().get_card(int(data[2])))
 
 class PlayerServer(asyncore.dispatcher):
     def __init__(self, player, host, port):
