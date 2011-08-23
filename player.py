@@ -174,10 +174,10 @@ class Player(threading.Thread):
             self.canvas.delete(self.table_cards.pop()[1])
 
     def show_score(self, points):
-        score = Toplevel(self.root)
-        for i in range(len(self.player_canvases)):
+        score = Toplevel(self.root, takefocus=True)
+        for i, point in enumerate(points):
             Label(score, text="Player {}".format(i)).grid(row=0, column=i)
-            Label(score, text=points[i]).grid(row=1, column=i)
+            Label(score, text=point).grid(row=1, column=i)
         score.mainloop()
 
     def next_round(self):
@@ -204,7 +204,7 @@ class Player(threading.Thread):
         for card in deck:
             card_images[hash(card)] = PhotoImage(file=card.image, master=self.root)
         return card_images
-        
+
 class PlayerHandler(asyncore.dispatcher_with_send):
     def __init__(self, player, *args):
         self.player = player
@@ -221,7 +221,7 @@ class PlayerHandler(asyncore.dispatcher_with_send):
             self.player.add_hand(data['cards'])
             self.player.bind_images()
         if 'points' in data:
-            self.player.show_score(data['points'])
+            self.player.root.after(2000, lambda x= data['points']:self.player.show_score(x))
             self.player.next_round()
         if 'player_index' in data and not data['player_index']:
             self.player.take_turn()
