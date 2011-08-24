@@ -16,12 +16,47 @@ class Lobby(threading.Thread):
         self.root = root
         self.client = Client("localhost", 9999)
         self.addr = ("localhost", random.randint(1000, 60000),)
-        self.game_list = Listbox(self.root)
-        self.game_list.pack()
-        Button(self.root, text="Join", command=self.join_game).pack()
+        self.setup_root()
         self.add_menu()
+        self.add_header()
+        self.add_game_list()
         self.join_server()
         self.start()
+
+    def setup_root(self):
+        self.root.title("Lobby")
+        self.root.resizable(0, 0)
+        self.root.config(padx=50, pady=10)
+        self.root.protocol("WM_DELETE_WINDOW", self.quit)
+
+    def add_menu(self):
+        menu = Menu(self.root)
+        file_menu = Menu(menu, tearoff=0)
+        file_menu.add_command(label="New Game", command=self.new_game)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.quit)
+        menu.add_cascade(label="File", menu=file_menu)
+        self.root.config(menu=menu)
+
+    def add_header(self):
+        frame = Frame(self.root)
+        frame.pack(pady=10)
+        style = Style()
+        style.configure("R.TLabel", foreground="red", font=('Courier New', 20, 'italic'))
+        Label(frame, text="Hearts", style="R.TLabel").pack()
+
+    def add_game_list(self):
+        label_frame = LabelFrame(self.root, text='Game List')
+        label_frame.pack()
+        frame = Frame(label_frame)
+        frame.pack(padx=30, pady=20)
+        self.game_list = Listbox(frame)
+        self.game_list.pack()
+        Button(frame, text="Join", command=self.join_game).pack()
+
+    def add_games(self, games):
+        for game in games:
+            self.game_list.insert(END, game)
 
     def join_server(self):
         self.client.send("join {} {} {}".format(self.id, *self.addr))
@@ -40,19 +75,6 @@ class Lobby(threading.Thread):
     def quit(self):
         self.client.close()
         self.root.destroy()
-
-    def add_games(self, games):
-        for game in games:
-            self.game_list.insert(END, game)
-
-    def add_menu(self):
-        menu = Menu(self.root)
-        file_menu = Menu(menu, tearoff=0)
-        file_menu.add_command(label="New Game", command=self.new_game)
-        file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.quit)
-        menu.add_cascade(label="File", menu=file_menu)
-        self.root.config(menu=menu)
 
     def run(self):
         server = LobbyServer(self, *self.addr)

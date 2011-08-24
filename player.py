@@ -46,6 +46,7 @@ class Player(threading.Thread):
         self.player_btn = Button(self.player_frame, state=DISABLED)
         self.face_down_image = PhotoImage(file="cards/b1fv.gif", master=self.root)
         self.card_images = self.get_card_images()
+        self.setup_root()
         self.add_widgets()
         self.add_canvas_widgets()
         self.next_round()
@@ -54,11 +55,13 @@ class Player(threading.Thread):
         self.join_game()
         self.start()
 
-    def add_widgets(self):
+    def setup_root(self):
         self.root.title("Hearts")
         self.root.geometry("1000x700")
         self.root.resizable(0, 0)
         #self.root.protocol("WM_DELETE_WINDOW", self.quit)
+
+    def add_widgets(self):
         self.canvas.pack(fill='both', expand='yes')
         self.player_frame.pack()
         self.player_btn.pack()
