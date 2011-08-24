@@ -184,8 +184,8 @@ class HeartsHandler(asyncore.dispatcher_with_send):
                 self.hearts.play_card(Deck().get_card(int(data[1])))
 
 class HeartsServer(asyncore.dispatcher):
-    def __init__(self, host, port):
-        self.hearts = Hearts()
+    def __init__(self, hearts, host, port):
+        self.hearts = hearts
         asyncore.dispatcher.__init__(self)
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
         self.set_reuse_addr()
@@ -201,4 +201,4 @@ class HeartsServer(asyncore.dispatcher):
             self.handler = HeartsHandler(self.hearts, sock)
 
 if __name__ == "__main__":
-    server = HeartsServer("localhost", 9999)
+    server = HeartsServer(Hearts(), "localhost", 9999)

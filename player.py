@@ -27,7 +27,7 @@ class PlayerCanvas:
         return positions[self.position]
 
 class Player(threading.Thread):
-    def __init__(self, root):
+    def __init__(self, root, port):
         threading.Thread.__init__(self)
         self.id = uuid.uuid4()
         self.max_raised_cards = 1
@@ -49,8 +49,8 @@ class Player(threading.Thread):
         self.add_widgets()
         self.add_canvas_widgets()
         self.next_round()
-        self.client = Client("localhost", 9999)
-        self.server_addr = ("localhost", random.randint(1000, 60000),)
+        self.client = Client("localhost", port)
+        self.addr = ("localhost", random.randint(1000, 60000),)
         self.join_game()
         self.start()
 
@@ -76,7 +76,7 @@ class Player(threading.Thread):
         self.player_canvas = self.player_canvases[0]
 
     def join_game(self):
-        self.client.send("join {} {} {}".format(self.id, *self.server_addr))
+        self.client.send("join {} {} {}".format(self.id, *self.addr))
 
     def add_hand(self, cards):
         # lower raised cards
@@ -121,14 +121,14 @@ class Player(threading.Thread):
     def validate_card(self, card):
         is_valid = True
         if not self.turn and Card("2", "Club") != card:
-            tkinter.messagebox.showwarning("Invalid Choice", "You must start with the Two of Clubs!")
+            tkinter.messagebox.showwarning("Invalid Choice", "You must start with the Two of Clubs!", master=self.root)
             is_valid = False
         elif self.suit_played.strip():
             if self.suit_played in [c[0].suit for c in self.player_canvas.cards] and card.suit != self.suit_played:
-                tkinter.messagebox.showwarning("Play a {}".format(self.suit_played), "You must follow suit!")
+                tkinter.messagebox.showwarning("Play a {}".format(self.suit_played), "You must follow suit!", master=self.root)
                 is_valid = False
         elif card.suit == "Heart" and not self.hearts_broken:
-            tkinter.messagebox.showwarning("Invalid Choice", "Hearts not broken yet!")
+            tkinter.messagebox.showwarning("Invalid Choice", "Hearts not broken yet!", master=self.root)
             is_valid = False
         return is_valid
 
@@ -196,7 +196,7 @@ class Player(threading.Thread):
             self.in_turn = True
 
     def run(self):
-        server = PlayerServer(self, *self.server_addr)
+        server = PlayerServer(self, *self.addr)
 
     def get_card_images(self):
         card_images = {}
@@ -245,5 +245,5 @@ class PlayerServer(asyncore.dispatcher):
 
 if __name__ == "__main__":
     root = Tk()
-    player = Player(root)
+    player = Player(root, 9999)
     root.mainloop()
