@@ -80,12 +80,14 @@ class Player(threading.Thread):
 
     def show_statistics(self):
         top_level = Toplevel(self.root, padx=25, pady=25)
+        frame = Frame(top_level)
         for i, name in enumerate(self.names):
-            Label(top_level, text=name, underline=1).grid(row=0, column=i)
+            Label(frame, text=name, underline=1).grid(row=0, column=i)
         for i, round_score in enumerate(self.round_scores):
             for j, score in enumerate(round_score):
-                Label(top_level, text=score).grid(row=i + 1, column=j)
-        Button(top_level, text="OK", command=top_level.destroy).grid(pady=5)
+                Label(frame, text=score).grid(row=i + 1, column=j)
+        frame.pack()
+        Button(top_level, text="OK", command=top_level.destroy).pack(pady=10)
 
     def add_widgets(self):
         self.canvas.pack(fill='both', expand='yes')
