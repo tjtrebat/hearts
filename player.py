@@ -14,7 +14,7 @@ from cards import *
 
 class PlayerCanvas:
     def __init__(self, root, position):
-        self.canvas = Canvas(root, width=325, height=135)
+        self.canvas = Canvas(root, width=325, height=135, bg="dark green", highlightthickness=0)
         self.position = position
         self.cards = []
 
@@ -27,9 +27,11 @@ class PlayerCanvas:
         return positions[self.position]
 
 class Player(threading.Thread):
-    def __init__(self, root, port):
+    def __init__(self, root, port, name):
         threading.Thread.__init__(self)
         self.id = uuid.uuid4()
+        self.name = name
+        self.names = []
         self.max_raised_cards = 1
         self.raised_cards = []
         self.table_cards = []
@@ -40,18 +42,23 @@ class Player(threading.Thread):
         self.hearts_broken = False
         self.turn = 0
         self.round = 0
+        self.round_scores = []
         self.root = root
-        self.canvas = Canvas(self.root, width=1000, height=650)
+        self.canvas = Canvas(self.root, width=1000, height=650, bg="dark green", highlightthickness=0)
         self.player_frame = Frame(self.root)
         self.player_btn = Button(self.player_frame, state=DISABLED)
         self.face_down_image = PhotoImage(file="cards/b1fv.gif", master=self.root)
         self.card_images = self.get_card_images()
         self.setup_root()
+        self.add_menu()
         self.add_widgets()
         self.add_canvas_widgets()
         self.next_round()
         self.client = Client("localhost", port)
         self.addr = ("localhost", random.randint(1000, 60000),)
+        self.chat_text = StringVar()
+        self.chat = Chat(("localhost", random.randint(1000, 60000),))
+        self.add_chat()
         self.join_game()
         self.start()
 
@@ -59,12 +66,45 @@ class Player(threading.Thread):
         self.root.title("Hearts")
         self.root.geometry("1000x700")
         self.root.resizable(0, 0)
-        #self.root.protocol("WM_DELETE_WINDOW", self.quit)
+        self.root.config(bg="dark green")
+        self.root.protocol("WM_DELETE_WINDOW", self.quit)
+
+    def add_menu(self):
+        menu = Menu(self.root)
+        file_menu = Menu(menu, tearoff=0)
+        file_menu.add_command(label="Statistics", command=self.show_statistics)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.quit)
+        menu.add_cascade(label="Game", menu=file_menu)
+        self.root.config(menu=menu)
+
+    def show_statistics(self):
+        top_level = Toplevel(self.root, padx=25, pady=25)
+        for i, name in enumerate(self.names):
+            Label(top_level, text=name, underline=1).grid(row=0, column=i)
+        for i, round_score in enumerate(self.round_scores):
+            for j, score in enumerate(round_score):
+                Label(top_level, text=score).grid(row=i + 1, column=j)
+        Button(top_level, text="OK", command=top_level.destroy).grid(pady=5)
 
     def add_widgets(self):
         self.canvas.pack(fill='both', expand='yes')
         self.player_frame.pack()
         self.player_btn.pack()
+
+    def add_chat(self):
+        frame = Frame()
+        chat = Text(frame, width=35, height=7, state=DISABLED)
+        chat.pack()
+        Entry(frame, textvariable=self.chat_text).pack(side="left", fill="both", expand=True)
+        Button(frame, text="Send", command=self.send_message).pack(side="right")
+        self.canvas.create_window(860, 630, window=frame)
+        self.chat.widget = chat
+        self.chat.start()
+        
+    def send_message(self):
+        self.client.send_data({"chat": (self.id, self.chat_text.get())})
+        self.chat_text.set("")
 
     def add_canvas_widgets(self):
         for position in range(4):
@@ -78,9 +118,6 @@ class Player(threading.Thread):
             self.player_canvases.append(player_canvas)
         self.player_canvas = self.player_canvases[0]
 
-    def join_game(self):
-        self.client.send("join {} {} {}".format(self.id, *self.addr))
-
     def add_hand(self, cards):
         # lower raised cards
         while len(self.raised_cards):
@@ -93,8 +130,12 @@ class Player(threading.Thread):
                 self.player_canvas.cards[i] = (card, self.player_canvas.cards[i][1],)
             self.player_canvas.canvas.itemconfig(self.player_canvas.cards[i][1], image=self.card_images[hash(card)])
 
+    def add_names(self):
+        for i, name in enumerate(self.names):
+            self.player_canvases[i].canvas.create_text(325 // 2, 130, text=name)
+
     def pass_cards(self):
-        self.client.send("pass {} {}".format(self.id, " ".join([str(hash(card[0])) for card in self.raised_cards])))
+        self.client.send_data({"pass": (self.id,) + tuple(card[0].get_card_id() for card in self.raised_cards)})
         self.player_btn.config(text='Play', state=DISABLED)
         self.max_raised_cards = 1
         self.in_turn = False
@@ -111,7 +152,7 @@ class Player(threading.Thread):
         if self.validate_card(card):
             self.player_canvas.canvas.delete(image)
             self.player_canvas.cards.remove(raised_card)
-            self.client.send("play {}".format(str(hash(card))))
+            self.client.send_data({"play": card.get_card_id()})
             self.player_btn.config(state=DISABLED)
             self.in_turn = False
             self.unbind_images()
@@ -176,10 +217,10 @@ class Player(threading.Thread):
         while len(self.table_cards):
             self.canvas.delete(self.table_cards.pop()[1])
 
-    def show_score(self, points):
+    def show_score(self, score):
         score = Toplevel(self.root, takefocus=True)
-        for i, point in enumerate(points):
-            Label(score, text="Player {}".format(i)).grid(row=0, column=i)
+        for i, (name, point,) in enumerate(score):
+            Label(score, text=name).grid(row=0, column=i)
             Label(score, text=point).grid(row=1, column=i)
         score.mainloop()
 
@@ -197,6 +238,13 @@ class Player(threading.Thread):
                 self.player_btn.config(text='Pass Across')
             self.max_raised_cards = 3
             self.in_turn = True
+
+    def quit(self):
+        self.client.close()
+        self.root.destroy()
+
+    def join_game(self):
+        self.client.send_data({"join": (self.id, self.name,) + self.addr + self.chat.addr})
 
     def run(self):
         server = PlayerServer(self, *self.addr)
@@ -223,8 +271,12 @@ class PlayerHandler(asyncore.dispatcher_with_send):
         if 'cards' in data:
             self.player.add_hand(data['cards'])
             self.player.bind_images()
-        if 'points' in data:
-            self.player.root.after(2000, lambda x= data['points']:self.player.show_score(x))
+        if 'names' in data:
+            self.player.names = data['names']
+            self.player.add_names()
+        if 'score' in data:
+            self.player.round_scores.append(data['score'])
+            self.player.root.after(2000, self.player.show_statistics)
             self.player.next_round()
         if 'player_index' in data and not data['player_index']:
             self.player.take_turn()
@@ -246,7 +298,48 @@ class PlayerServer(asyncore.dispatcher):
             print('Incoming connection from %s' % repr(addr))
             self.handler = PlayerHandler(self.player, sock)
 
+class ChatHandler(asyncore.dispatcher_with_send):
+    def __init__(self, widget, *args):
+        self.widget = widget
+        super(ChatHandler, self).__init__(*args)
+
+    def handle_read(self):
+        try:
+            data = self.recv(1024).decode("UTF-8").strip()
+        except socket.error:
+            sys.exit("Error reading data from client.")
+        if data:
+            self.widget.config(state=NORMAL)
+            self.widget.insert(END, data + "\n")
+            self.widget.config(state=DISABLED)
+
+class ChatServer(asyncore.dispatcher):
+    def __init__(self, widget, host, port):
+        self.widget = widget
+        asyncore.dispatcher.__init__(self)
+        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.set_reuse_addr()
+        self.bind((host, port))
+        self.listen(5)
+        asyncore.loop()
+
+    def handle_accept(self):
+        pair = self.accept()
+        if pair is not None:
+            sock, addr = pair
+            print('Incoming connection from %s' % repr(addr))
+            self.handler = ChatHandler(self.widget, sock)
+
+class Chat(threading.Thread):
+    def __init__(self, addr):
+        threading.Thread.__init__(self)
+        self.addr = addr
+        self.widget = None
+
+    def run(self):
+        server = ChatServer(self.widget, *self.addr)
+
 if __name__ == "__main__":
     root = Tk()
-    player = Player(root, 9999)
+    player = Player(root, 9999, socket.gethostname())
     root.mainloop()

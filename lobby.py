@@ -14,6 +14,7 @@ class Lobby(threading.Thread):
         threading.Thread.__init__(self)
         self.id = uuid.uuid4()
         self.root = root
+        self.player_name = StringVar()
         self.client = Client("localhost", 9999)
         self.addr = ("localhost", random.randint(1000, 60000),)
         self.setup_root()
@@ -32,11 +33,19 @@ class Lobby(threading.Thread):
     def add_menu(self):
         menu = Menu(self.root)
         file_menu = Menu(menu, tearoff=0)
-        file_menu.add_command(label="New Game", command=self.new_game)
+        file_menu.add_command(label="Options", command=self.show_options)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.quit)
-        menu.add_cascade(label="File", menu=file_menu)
+        menu.add_cascade(label="Game", menu=file_menu)
         self.root.config(menu=menu)
+
+    def show_options(self):
+        top_level = Toplevel(self.root, padx=25, pady=25)
+        label_frame = LabelFrame(top_level, text="Player name")
+        label_frame.pack()
+        entry = Entry(label_frame, textvariable=self.player_name)
+        entry.pack(padx=5, pady=5)
+        Button(top_level, text="OK", command=top_level.destroy).pack(pady=5)
 
     def add_header(self):
         frame = Frame(self.root)
@@ -56,20 +65,20 @@ class Lobby(threading.Thread):
 
     def add_games(self, games):
         for game in games:
-            self.game_list.insert(END, game)
+            self.game_list.insert(END, "localhost:{}".format(game))
 
     def join_server(self):
         self.client.send("join {} {} {}".format(self.id, *self.addr))
 
     def join_game(self):
-        self.play_game(int(self.game_list.get(self.game_list.curselection()[0])))
+        self.play_game(int(self.game_list.get(self.game_list.curselection()[0]).split(":")[1]))
 
     def new_game(self):
         self.client.send("new {}".format(self.id))
 
     def play_game(self, port):
         root = Tk()
-        player = Player(root, port)
+        player = Player(root, port, self.player_name.get())
         root.mainloop()
 
     def quit(self):
@@ -94,6 +103,7 @@ class LobbyHandler(asyncore.dispatcher_with_send):
             if data[0] == "games":
                 self.lobby.add_games(data[1:])
             if data[0] == "new":
+                self.lobby.add_games(data[1:])
                 self.lobby.root.after(1000, lambda x= int(data[1]):self.lobby.play_game(x))
 
 class LobbyServer(asyncore.dispatcher):

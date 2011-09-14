@@ -7,10 +7,12 @@ from client import *
 from cards import *
 
 class Player(Hand):
-    def __init__(self, id):
+    def __init__(self, id, name):
         super(Player, self).__init__()
         self.id = id
+        self.name = name
         self.client = None
+        self.chat_client = None
         self.has_passed = False
         self.trick_cards = []
         self.table_card = None
@@ -24,15 +26,17 @@ class Hearts:
         self.cards_played = 0
         self.player_index = 0
 
-    def add_player(self, player_id, host, port):
+    def add_player(self, player_id, player_name, host, port, chat_host, chat_port):
         if len(self.players) < 4:
-            player = Player(player_id)
+            player = Player(player_id, player_name)
             player.client = Client(host, port)
+            player.chat_client = Client(chat_host, chat_port)
             self.players.append(player)
             if len(self.players) >= 4:
                 self.deal()
-                for player in self.players:
-                    player.client.send_data({'cards': player.cards})
+                player_names = self.get_player_names()
+                for i, player in enumerate(self.players):
+                    player.client.send_data({'cards': player.cards, 'names': player_names[i:] + player_names[0:i]})
 
     def deal(self):
         self.deck = Deck()
@@ -40,7 +44,9 @@ class Hearts:
         for i in range(13):
             for player in self.players:
                 player.add(self.deck.pop())
-        # sort player cards
+        self.sort_player_cards() # sort player cards
+
+    def sort_player_cards(self):
         for player in self.players:
             player.cards = sorted(player.cards)
 
@@ -56,7 +62,7 @@ class Hearts:
             player_index = (player_index + 2) % len(self.players)
         other_player = self.players[player_index]
         for card_id in cards:
-            card = Deck().get_card(int(card_id))
+            card = Deck.get_card(int(card_id))
             player.remove(card)
             other_player.add(card)
         other_player.cards = sorted(other_player.cards)
@@ -88,6 +94,7 @@ class Hearts:
 
     def play_card(self, card):
         self.cards_played += 1
+        card = Deck.get_card(card)
         self.players[self.player_index].table_card = card
         player_turn = self.player_index
         self.next_turn()
@@ -102,25 +109,39 @@ class Hearts:
         self.round += 1
         self.cards_played = 0
         self.set_player_points()
+        player_points = self.get_player_points()
+        # reset player attributes
         for player in self.players:
             player.cards = []
             player.trick_cards = []
             player.has_passed = False
+        # deal cards and score
         if not self.game_over():
             self.deal()
             player_index = -1
             if self.round % 4 > 2:
                 self.next_turn()
                 player_index = self.player_index
-            player_points = [player.points for player in self.players]
             for i, player in enumerate(self.players):
-                data = {'cards': player.cards, 'points': player_points[i:4] + player_points[0:i]}
+                data = {'cards': player.cards, 'score': player_points[i:4] + player_points[0:i]}
                 if player_index >= 0:
                     data['player_index'] = (4 + player_index - i) % 4
                 player.client.send_data(data)
-        else: # game over, send player points
+        else: # game over, send player score
             for i, player in enumerate(self.players):
-                player.client.send_data({'points': player_points[i:4] + player_points[0:i]})
+                player.client.send_data({'score': player_points[i:4] + player_points[0:i]})
+
+    def game_over(self):
+        game_over = False
+        for player in self.players:
+            if player.points >= 100:
+                game_over = True
+        return game_over
+
+    def chat(self, player_id, message):
+        message = "{} says: {}".format(self.get_player(player_id).name, message)
+        for player in self.players:
+            player.chat_client.send(message)
 
     def set_player_points(self):
         for player in self.players:
@@ -137,24 +158,28 @@ class Hearts:
                     if p != player:
                         p.points += points
 
-    def game_over(self):
-        game_over = False
+    def get_player_points(self):
+        points = []
         for player in self.players:
-            if player.points >= 100:
-                game_over = True
-        return game_over
+            points.append(player.points)
+        return points
 
     def get_trick_winner(self):
         trick_winner = None
         highest_rank = -1
-        ranks = [str(i) for i in range(2, 11)] + ['Jack', 'Queen', 'King', 'Ace']
         for player in self.players:
             card = player.table_card
-            rank = ranks.index(card.rank)
+            rank = Deck.ranks.index(card.rank)
             if card.suit == self.players[(self.player_index + 1) % 4].table_card.suit and rank >= highest_rank:
                 trick_winner = player
                 highest_rank = rank
         return trick_winner
+
+    def get_player_names(self):
+        player_names = []
+        for player in self.players:
+            player_names.append(player.name)
+        return player_names
 
     def get_player(self, player_id):
         player = None
@@ -170,18 +195,19 @@ class HeartsHandler(asyncore.dispatcher_with_send):
 
     def handle_read(self):
         try:
-            data = self.recv(1024).decode("UTF-8").strip()
-        except socket.error:
+            data = pickle.loads(self.recv(1024))
+        except (socket.error, EOFError):
             sys.exit("Error reading data from client.")
-        #print(data)
-        if data:
-            data = data.split()
-            if data[0] == "join":
-                self.hearts.add_player(data[1], data[2], int(data[3]))
-            elif data[0] == "pass":
-                self.hearts.pass_cards(data[1], data[2:5])
-            elif data[0] == "play":
-                self.hearts.play_card(Deck().get_card(int(data[1])))
+        if "join" in data:
+            self.hearts.add_player(data["join"][0], data["join"][1],
+                                   data["join"][2], int(data["join"][3]),
+                                   data["join"][4], int(data["join"][5]))
+        elif "pass" in data:
+            self.hearts.pass_cards(data["pass"][0], data["pass"][1:])
+        elif "play" in data:
+            self.hearts.play_card(int(data["play"]))
+        elif "chat" in data:
+            self.hearts.chat(data["chat"][0], data["chat"][1])
 
 class HeartsServer(asyncore.dispatcher):
     def __init__(self, hearts, host, port):

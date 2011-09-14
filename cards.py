@@ -37,17 +37,18 @@ class Card:
         return self.__cmp__(other) >= 0
 
     def __cmp__(self, other):
-        suits = ('Club', 'Diamond', 'Spade', 'Heart',)
-        ranks = [str(i) for i in range(2, 11)] + ['Jack', 'Queen', 'King', 'Ace']
         if self.suit == other.suit:
-            return ranks.index(self.rank) - ranks.index(other.rank)
+            return Deck.ranks.index(self.rank) - Deck.ranks.index(other.rank)
         else:
-            return suits.index(self.suit) - suits.index(other.suit)
+            return Deck.suits.index(self.suit) - Deck.suits.index(other.suit)
 
     def __str__(self):
         return '{} of {}s'.format(self.rank, self.suit)
 
 class Deck:
+    ranks = tuple(str(i) for i in range(2, 11)) + ('Jack', 'Queen', 'King', 'Ace',)
+    suits = ('Club', 'Diamond', 'Spade', 'Heart',)
+
     def __init__(self, count=1):
         self.count = count
         self.cards = self.get_cards()
@@ -61,16 +62,18 @@ class Deck:
     def get_cards(self):
         cards = []
         for i in range(self.count):
-            for rank in list(range(2, 11)) + ['Jack', 'Queen', 'King', 'Ace']:
-                for suit in ('Spade', 'Heart', 'Diamond', 'Club'):
-                    cards.append(Card(str(rank), suit))
+            for rank in self.ranks:
+                for suit in self.suits:
+                    cards.append(Card(rank, suit))
         return cards
 
-    def get_card(self, card_id):
+    @classmethod
+    def get_card(cls, card_id):
         card = None
-        for c in self.cards:
-            if card_id == hash(c):
-                card = c
+        for rank in cls.ranks:
+            for suit in cls.suits:
+                if card_id == hash(Card(rank, suit)):
+                    card = Card(rank, suit)
         return card
 
     def __getitem__(self, item):
@@ -80,7 +83,10 @@ class Deck:
         return len(self.cards)
 
     def __str__(self):
-        return ','.join([str(card) for card in self.cards])
+        s = ""
+        for card in self.cards:
+            s += str(card) + "\n"
+        return s + "\r\n"
 
 class Hand(object):
     def __init__(self):
@@ -96,4 +102,7 @@ class Hand(object):
         return [card.get_card_id() for card in sorted(self.cards)]
 
     def __str__(self):
-        return ','.join([str(card) for card in self.cards])
+        s = ""
+        for card in self.cards:
+            s += str(card) + "\n"
+        return s + "\r\n"
