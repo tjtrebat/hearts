@@ -30,8 +30,11 @@ class Hearts:
         if len(self.players) < 4:
             player = Player(player_id, player_name)
             player.client = Client(host, port)
+            player.client.connect()
             player.chat_client = Client(chat_host, chat_port)
-            self.players.append(player)
+            player.chat_client.connect()
+            if player.client.conn is not None:
+                self.players.append(player)
             if len(self.players) >= 4:
                 self.deal()
                 player_names = self.get_player_names()
@@ -54,12 +57,13 @@ class Hearts:
         player = self.get_player(player_id)
         player.has_passed = True
         player_index = self.players.index(player)
-        if not self.round % 4:
-            player_index = (player_index + 1) % len(self.players)
-        elif self.round % 4 < 2:
-            player_index = (player_index + 3) % 4
-        elif self.round % 4 < 3:
-            player_index = (player_index + 2) % len(self.players)
+        #if not self.round % 4:
+        #    player_index = (player_index + 1) % len(self.players)
+        #elif self.round % 4 < 2:
+        #    player_index = (player_index + 3) % 4
+        #elif self.round % 4 < 3:
+        #    player_index = (player_index + 2) % len(self.players)
+        player_index = (player_index + 1) % len(self.players)
         other_player = self.players[player_index]
         for card_id in cards:
             card = Deck.get_card(int(card_id))
@@ -149,9 +153,11 @@ class Hearts:
             for card in player.trick_cards:
                 if card.suit == 'Heart':
                     points += 1
-                elif Card('Queen', 'Spade') == card:
+                elif card == Card('Queen', 'Spade'):
                     points += 13
-            if points < 26:
+                elif card == Card('Ten', 'Diamond'):
+                    points += 10
+            if points < 36:
                 player.points += points
             else:
                 for p in self.players:

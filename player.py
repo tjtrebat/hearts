@@ -27,7 +27,7 @@ class PlayerCanvas:
         return positions[self.position]
 
 class Player(threading.Thread):
-    def __init__(self, root, port, name):
+    def __init__(self, root, server_addr, name):
         threading.Thread.__init__(self)
         self.id = uuid.uuid4()
         self.name = name
@@ -39,7 +39,7 @@ class Player(threading.Thread):
         self.player_canvases = []
         self.player_canvas = None
         self.suit_played = ''
-        self.hearts_broken = False
+        #self.hearts_broken = False
         self.turn = 0
         self.round = 0
         self.round_scores = []
@@ -49,18 +49,24 @@ class Player(threading.Thread):
         self.player_btn = Button(self.player_frame, state=DISABLED)
         self.face_down_image = PhotoImage(file="cards/b1fv.gif", master=self.root)
         self.card_images = self.get_card_images()
-        self.setup_root()
-        self.add_menu()
-        self.add_widgets()
-        self.add_canvas_widgets()
-        self.next_round()
-        self.client = Client("localhost", port)
-        self.addr = ("localhost", random.randint(1000, 60000),)
-        self.chat_text = StringVar()
+        self.chat_text = StringVar(self.root)
         self.chat = Chat(("localhost", random.randint(1000, 60000),))
-        self.add_chat()
-        self.join_game()
-        self.start()
+        self.addr = ("localhost", random.randint(1000, 60000),)
+        self.client = Client(*server_addr)
+        self.connect_to_server()
+
+    def connect_to_server(self):
+        self.client.connect()
+        if self.client.conn is not None:
+            self.setup_root()
+            self.add_menu()
+            self.add_widgets()
+            self.add_canvas_widgets()
+            self.add_chat()
+            self.start()
+            self.chat.start()
+            self.join_game()
+            self.next_round()
 
     def setup_root(self):
         self.root.title("Hearts")
@@ -95,14 +101,13 @@ class Player(threading.Thread):
         self.player_btn.pack()
 
     def add_chat(self):
-        frame = Frame()
+        frame = Frame(self.root)
         chat = Text(frame, width=35, height=7, state=DISABLED)
         chat.pack()
         Entry(frame, textvariable=self.chat_text).pack(side="left", fill="both", expand=True)
         Button(frame, text="Send", command=self.send_message).pack(side="right")
         self.canvas.create_window(860, 630, window=frame)
         self.chat.widget = chat
-        self.chat.start()
         
     def send_message(self):
         self.client.send_data({"chat": (self.id, self.chat_text.get())})
@@ -147,6 +152,7 @@ class Player(threading.Thread):
         self.player_btn.config(command=self.play_card)
         self.in_turn = True
         self.bind_images()
+        self.root.focus_force()
 
     def play_card(self):
         raised_card = self.raised_cards.pop()
@@ -170,13 +176,30 @@ class Player(threading.Thread):
             tkinter.messagebox.showwarning("Invalid Choice", "You must start with the Two of Clubs!", master=self.root)
             is_valid = False
         elif self.suit_played.strip():
-            if self.suit_played in [c[0].suit for c in self.player_canvas.cards] and card.suit != self.suit_played:
+            if self.suit_played in self.get_available_suits() and card.suit != self.suit_played:
                 tkinter.messagebox.showwarning("Play a {}".format(self.suit_played), "You must follow suit!", master=self.root)
                 is_valid = False
-        elif card.suit == "Heart" and not self.hearts_broken:
-            tkinter.messagebox.showwarning("Invalid Choice", "Hearts not broken yet!", master=self.root)
-            is_valid = False
+        #elif card.suit == "Heart" and not self.hearts_broken:
+        #    tkinter.messagebox.showwarning("Invalid Choice", "Hearts not broken yet!", master=self.root)
+        #    is_valid = False
+        elif self.turn < 4:
+            if card.suit == "Heart":
+                tkinter.messagebox.showwarning("Invalid Choice", "You can not play Hearts on the first hand!", master=self.root)
+                is_valid = False
+            elif card == Card("Queen", "Spade"):
+                tkinter.messagebox.showwarning("Invalid Choice", "You can not play the Queen of Spades on the first hand!", master=self.root)
+                is_valid = False
+            elif card == Card("10", "Diamond"):
+                tkinter.messagebox.showwarning("Invalid Choice", "You can not play the Ten of Diamonds on the first hand!", master=self.root)
+                is_valid = False
         return is_valid
+
+    def get_available_suits(self):
+        available_suits = []
+        for card in self.player_canvas.cards:
+            if card[0].suit not in available_suits:
+                available_suits.append(card[0].suit)
+        return available_suits
 
     def bind_images(self):
         for card, image in self.player_canvas.cards:
@@ -210,8 +233,8 @@ class Player(threading.Thread):
             self.suit_played = ''
         elif self.turn % 4 <= 1:
             self.suit_played = card.suit
-        if card.suit == "Heart":
-            self.hearts_broken = True
+        #if card.suit == "Heart":
+        #    self.hearts_broken = True
         self.table_cards.append((card, self.canvas.create_image(self.player_canvases[player_index].get_card_position(),
                                                                 image=self.card_images[hash(card)]),))
 
@@ -229,17 +252,20 @@ class Player(threading.Thread):
     def next_round(self):
         self.turn = 0
         self.round += 1
-        self.hearts_broken = False
-        if self.round % 4 > 0:
-            self.player_btn.config(command=self.pass_cards)
-            if self.round % 4 < 2:
-                self.player_btn.config(text='Pass Left')
-            elif self.round % 4 < 3:
-                self.player_btn.config(text='Pass Right')
-            else:
-                self.player_btn.config(text='Pass Across')
-            self.max_raised_cards = 3
-            self.in_turn = True
+        #self.hearts_broken = False
+        #if self.round % 4 > 0:
+            #self.player_btn.config(command=self.pass_cards)
+            #if self.round % 4 < 2:
+            #    self.player_btn.config(text='Pass Left')
+            #elif self.round % 4 < 3:
+            #    self.player_btn.config(text='Pass Right')
+            #else:
+            #    self.player_btn.config(text='Pass Across')
+            #self.max_raised_cards = 3
+            #self.in_turn = True
+        self.player_btn.config(command=self.pass_cards, text='Pass Left')
+        self.max_raised_cards = 3
+        self.in_turn = True
 
     def quit(self):
         self.client.close()
@@ -278,7 +304,7 @@ class PlayerHandler(asyncore.dispatcher_with_send):
             self.player.add_names()
         if 'score' in data:
             self.player.round_scores.append(data['score'])
-            self.player.root.after(2000, self.player.show_statistics)
+            self.player.root.after(1000, self.player.show_statistics)
             self.player.next_round()
         if 'player_index' in data and not data['player_index']:
             self.player.take_turn()
@@ -343,5 +369,5 @@ class Chat(threading.Thread):
 
 if __name__ == "__main__":
     root = Tk()
-    player = Player(root, 9999, socket.gethostname())
+    player = Player(root, ["localhost", 9999,], socket.gethostname())
     root.mainloop()
